@@ -1,0 +1,24 @@
+# Nuxt
+.nuxt
+.output
+.data
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules
+*.log
+
+# IDE
+.vscode
+.idea
+.DS_Store
+
+# Misc
+dist
+.cache
+
+# Claude Code / MCP
+.claude/
+.mcp.json
