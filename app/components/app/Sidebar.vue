@@ -17,6 +17,8 @@ import {
   Settings,
   Rocket,
   Heart,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from 'lucide-vue-next'
 
@@ -82,6 +84,7 @@ const version = '0.0.1.27.092025-20 beta'
 
 const { subscription, planos } = useSubscription()
 const { unreadCount } = useUnreadChats()
+const { collapsed, toggle, expand } = useSidebar()
 
 const currentTier = computed(() => {
   const currentValor = subscription.data.value?.plan?.valor_mensal ?? null
@@ -147,14 +150,42 @@ const upsellPlan = computed(() => {
 
 <template>
   <aside
-    class="flex h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+    class="flex h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200"
+    :class="collapsed ? 'w-16' : 'w-64'"
   >
-    <div class="flex items-center px-5 py-5">
-      <ZapifineLogo :size="36" />
+    <div
+      class="flex flex-col items-center gap-2 px-3 py-4"
+      :class="collapsed ? '' : 'flex-row justify-between'"
+    >
+      <div v-if="!collapsed" class="flex-1 pl-2">
+        <ZapifineLogo :size="36" />
+      </div>
+      <img
+        v-else
+        src="/favicon.png"
+        alt="Zapifine"
+        class="h-9 w-9 rounded-lg object-contain"
+        draggable="false"
+      />
+      <button
+        type="button"
+        class="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition hover:bg-sidebar-accent hover:text-sidebar-foreground"
+        :title="collapsed ? 'Expandir menu' : 'Minimizar menu'"
+        @click="toggle"
+      >
+        <PanelLeftOpen v-if="collapsed" class="h-4 w-4" />
+        <PanelLeftClose v-else class="h-4 w-4" />
+      </button>
     </div>
 
-    <nav class="flex-1 overflow-y-auto px-3 py-2">
-      <ul class="space-y-0.5">
+    <nav
+      class="flex-1 overflow-y-auto py-2"
+      :class="collapsed ? 'px-2' : 'px-3'"
+    >
+      <ul
+        class="space-y-0.5"
+        :class="collapsed ? 'flex flex-col items-center' : ''"
+      >
         <li
           v-for="entry in resolvedNav"
           :key="entry.type === 'item' ? entry.to : entry.label"
@@ -167,18 +198,21 @@ const upsellPlan = computed(() => {
             :badge="entry.badge"
             :locked="entry.locked"
             :count="entry.count"
+            :collapsed="collapsed"
           />
           <AppNavGroup
             v-else
             :label="entry.label"
             :icon="entry.icon"
             :children="entry.children"
+            :collapsed="collapsed"
+            @expand-sidebar="expand"
           />
         </li>
       </ul>
     </nav>
 
-    <div v-if="upsellPlan" class="px-3 pb-3">
+    <div v-if="upsellPlan && !collapsed" class="px-3 pb-3">
       <div
         class="rounded-xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/60 via-[#1a1030] to-purple-950/40 p-4 text-center"
       >
@@ -199,6 +233,7 @@ const upsellPlan = computed(() => {
     </div>
 
     <div
+      v-if="!collapsed"
       class="border-t border-sidebar-border px-5 py-3 text-xs text-muted-foreground"
     >
       <p class="mb-1">{{ version }}</p>

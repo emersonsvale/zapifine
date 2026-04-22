@@ -245,14 +245,21 @@ export function useChats() {
       .eq('visto', false)
   }
 
+  const unreadGlobal = useState<number>('chats-unread-count', () => 0)
+
   async function selectConversation(id: number) {
     selectedId.value = id
     const list = conversations.value ?? []
     const idx = list.findIndex((c) => c.id === id)
+    let decrement = 0
     if (idx !== -1) {
+      decrement = list[idx]!.unread_count ?? 0
       const next = list.slice()
       next[idx] = { ...next[idx]!, unread_count: 0 }
       conversations.value = next
+    }
+    if (decrement > 0) {
+      unreadGlobal.value = Math.max(0, (unreadGlobal.value ?? 0) - decrement)
     }
     await markConversationSeen(id)
   }
