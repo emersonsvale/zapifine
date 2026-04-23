@@ -22,6 +22,8 @@ type Conversation = {
   last_message_tipo: string | null
   last_message_status: MsgStatus | null
   unread_count: number
+  isgrupo: boolean
+  grupoNome: string | null
 }
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
@@ -104,6 +106,22 @@ export function useChats() {
         last_message_status: MsgStatus | null
         unread_count: number
       }>
+
+      const ids = rows.map((r) => r.id)
+      const groupMap = new Map<number, { isgrupo: boolean; grupoNome: string | null }>()
+      if (ids.length > 0) {
+        const { data: gRows } = await supabase
+          .from('whats_conversa')
+          .select('id, isgrupo, "grupoNome"' as never)
+          .in('id', ids)
+        for (const g of (gRows ?? []) as any[]) {
+          groupMap.set(g.id, {
+            isgrupo: Boolean(g.isgrupo),
+            grupoNome: g.grupoNome ?? null,
+          })
+        }
+      }
+
       return rows.map<Conversation>((r) => ({
         id: r.id,
         remoteJid: r.remoteJid,
@@ -125,6 +143,8 @@ export function useChats() {
         last_message_tipo: r.last_message_tipo,
         last_message_status: r.last_message_status,
         unread_count: Number(r.unread_count ?? 0),
+        isgrupo: groupMap.get(r.id)?.isgrupo ?? false,
+        grupoNome: groupMap.get(r.id)?.grupoNome ?? null,
       }))
     },
     { watch: [() => authUser.value?.id], default: () => [] },
@@ -182,6 +202,74 @@ export function useChats() {
     } finally {
       togglingIa.value = false
     }
+  }
+
+  async function reactMessage(message: Message, reaction: string) {
+    const c = selectedConversation.value
+    if (!c || !companyId.value) throw new Error('Sem conversa selecionada.')
+    const idMensagem = (message as unknown as { id_mensagem?: string | null }).id_mensagem
+    if (!idMensagem) throw new Error('Mensagem sem ID do WhatsApp (não pode reagir).')
+    const number =
+      extractNumber(c.remoteJid) ??
+      extractNumber(c.leads?.numero_whatsapp_lead)
+    if (!number) throw new Error('Número WhatsApp inválido.')
+
+    const currentReaction = (message as unknown as { reacao?: string | null }).reacao ?? ''
+    const nextReaction = currentReaction === reaction ? '' : reaction
+
+    // Optimistic
+    const list = messages.value ?? []
+    const idx = list.findIndex((m) => m.id === message.id)
+    if (idx !== -1) {
+      const next = list.slice()
+      next[idx] = { ...(next[idx] as any), reacao: nextReaction } as Message
+      messages.value = next
+    }
+
+    try {
+      const { data: fnData, error } = await supabase.functions.invoke(
+        'send_whatsapp_rich',
+        {
+          method: 'POST',
+          body: {
+            company_id: companyId.value,
+            type: 'react',
+            number,
+            messageId: idMensagem,
+            reaction: nextReaction,
+          },
+        },
+      )
+      if (error) throw new Error(error.message)
+      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
+        throw new Error(String((fnData as { error: unknown }).error))
+      }
+      await supabase
+        .from('whats_mensagens_conversa')
+        .update({ reacao: nextReaction || null } as never)
+        .eq('id', message.id)
+    } catch (err) {
+      // rollback
+      if (idx !== -1) {
+        const rollback = (messages.value ?? []).slice()
+        rollback[idx] = { ...(rollback[idx] as any), reacao: currentReaction } as Message
+        messages.value = rollback
+      }
+      throw err
+    }
+  }
+
+  async function linkLead(conversationId: number, leadId: number) {
+    const { data, error } = await supabase
+      .from('whats_conversa')
+      .update({ lead_id: leadId } as never)
+      .eq('id', conversationId)
+      .select('id, lead_id')
+    if (error) throw error
+    if (!data?.length) {
+      throw new Error('Não foi possível vincular o lead (verifique RLS).')
+    }
+    await refreshConversations()
   }
 
   async function clearMessages(conversationId: number) {
@@ -331,6 +419,9 @@ export function useChats() {
         throw new Error(String((fnData as { error: unknown }).error))
       }
 
+      const messageId =
+        (fnData as { _messageId?: string | null } | null)?._messageId ?? null
+
       const { data: inserted, error: insertErr } = await supabase
         .from('whats_mensagens_conversa')
         .insert({
@@ -340,6 +431,7 @@ export function useChats() {
           mensagem: finalText,
           tipo: 'text',
           status: 'Enviada',
+          id_mensagem: messageId,
         } as never)
         .select()
         .single()
@@ -353,6 +445,132 @@ export function useChats() {
         messages.value = next
       }
 
+      refreshConversations()
+    } catch (err) {
+      messages.value = (messages.value ?? []).filter((m) => m.id !== tempId)
+      throw err
+    }
+  }
+
+  type RichKind = 'media' | 'link' | 'location' | 'contact' | 'poll'
+
+  type RichPayload = {
+    type: RichKind
+    url?: string
+    caption?: string
+    filename?: string
+    mimetype?: string
+    mediaType?: string
+    text?: string
+    title?: string
+    description?: string
+    latitude?: number
+    longitude?: number
+    name?: string
+    contacts?: unknown[]
+    options?: string[]
+  }
+
+  function previewForKind(p: RichPayload): { tipo: string; mensagem: string; midia_url: string | null } {
+    switch (p.type) {
+      case 'media':
+        return {
+          tipo: p.mediaType || 'midia',
+          mensagem: p.caption ?? p.filename ?? '[mídia enviada]',
+          midia_url: p.url ?? null,
+        }
+      case 'link':
+        return { tipo: 'link', mensagem: p.text ?? p.url ?? '[link]', midia_url: p.url ?? null }
+      case 'location':
+        return {
+          tipo: 'localizacao',
+          mensagem: p.name ?? `📍 ${p.latitude}, ${p.longitude}`,
+          midia_url: null,
+        }
+      case 'contact':
+        return { tipo: 'contato', mensagem: `[${p.contacts?.length ?? 0} contato(s)]`, midia_url: null }
+      case 'poll':
+        return {
+          tipo: 'enquete',
+          mensagem: `📊 ${p.name} — ${(p.options ?? []).join(' / ')}`,
+          midia_url: null,
+        }
+    }
+  }
+
+  async function sendRich(payload: RichPayload) {
+    const c = selectedConversation.value
+    if (!c || !companyId.value) throw new Error('Sem conversa selecionada.')
+    const number =
+      extractNumber(c.remoteJid) ??
+      extractNumber(c.leads?.numero_whatsapp_lead)
+    if (!number) throw new Error('Número WhatsApp inválido.')
+
+    const preview = previewForKind(payload)
+
+    const tempId = -Date.now()
+    const optimistic: Message = {
+      id: tempId,
+      created_at: new Date().toISOString(),
+      sender: authUser.value?.id ?? null,
+      mensagem: preview.mensagem,
+      tipo: preview.tipo,
+      midia_url: preview.midia_url,
+      status: 'Enviada',
+      lead_id: c.lead_id,
+      whats_conversa_id: c.id,
+    } as unknown as Message
+    messages.value = [...(messages.value ?? []), optimistic]
+
+    try {
+      const { data: fnData, error } = await supabase.functions.invoke(
+        'send_whatsapp_rich',
+        {
+          method: 'POST',
+          body: { company_id: companyId.value, number, ...payload },
+        },
+      )
+      if (error) {
+        let detail = error.message
+        try {
+          const ctx = (error as { context?: Response }).context
+          if (ctx && typeof ctx.text === 'function') {
+            const body = await ctx.text()
+            if (body) detail = body
+          }
+        } catch {}
+        throw new Error(detail)
+      }
+      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
+        throw new Error(String((fnData as { error: unknown }).error))
+      }
+
+      const messageId =
+        (fnData as { _messageId?: string | null } | null)?._messageId ?? null
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from('whats_mensagens_conversa')
+        .insert({
+          whats_conversa_id: c.id,
+          lead_id: c.lead_id,
+          sender: authUser.value?.id ?? null,
+          mensagem: preview.mensagem,
+          tipo: preview.tipo,
+          midia_url: preview.midia_url,
+          status: 'Enviada',
+          id_mensagem: messageId,
+        } as never)
+        .select()
+        .single()
+      if (insertErr) throw insertErr
+
+      const list = messages.value ?? []
+      const idx = list.findIndex((m) => m.id === tempId)
+      if (idx !== -1 && inserted) {
+        const next = list.slice()
+        next[idx] = inserted as Message
+        messages.value = next
+      }
       refreshConversations()
     } catch (err) {
       messages.value = (messages.value ?? []).filter((m) => m.id !== tempId)
@@ -515,6 +733,9 @@ export function useChats() {
     selectedId,
     selectConversation,
     sendText,
+    sendRich,
+    reactMessage,
+    linkLead,
     refreshConversations,
     refreshMessages,
     convPending,

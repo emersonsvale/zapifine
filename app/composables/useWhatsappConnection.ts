@@ -136,8 +136,7 @@ export function useWhatsappConnection() {
         method: 'POST',
         body: {
           instanceName,
-          qrcode: true,
-          integration: 'WHATSAPP-BAILEYS',
+          companyId: companyId.value,
         },
       })
       instanceName = res.instance?.instanceName ?? instanceName

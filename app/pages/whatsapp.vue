@@ -33,7 +33,7 @@ function formatLastConnection(iso: string | null | undefined) {
 }
 
 const providerLabel = computed(() =>
-  connection.value?.provider === 'cloud_api' ? 'Cloud API' : 'Evolution API',
+  connection.value?.provider === 'cloud_api' ? 'Cloud API' : 'Evolution Go',
 )
 </script>
 
@@ -51,7 +51,7 @@ const providerLabel = computed(() =>
         <TabsList class="h-11 p-1">
           <TabsTrigger value="evolution" class="px-4">
             <QrCode class="h-4 w-4" />
-            Evolution (Baileys)
+            Evolution Go
           </TabsTrigger>
           <TabsTrigger value="cloud_api" class="px-4">
             <ShieldCheck class="h-4 w-4" />

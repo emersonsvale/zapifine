@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import {
   Loader2,
   QrCode,
   RefreshCw,
   LogOut,
   CheckCircle2,
+  Clock,
 } from 'lucide-vue-next'
+
+const QR_LIFETIME_MS = 45_000
 
 const { connection, isConnected, statusLabel, generateQr, disconnect } =
   useWhatsappConnection()
@@ -14,6 +17,39 @@ const { connection, isConnected, statusLabel, generateQr, disconnect } =
 const generating = ref(false)
 const disconnecting = ref(false)
 const errorMsg = ref('')
+const now = ref(Date.now())
+const qrDisplayedAt = ref<number | null>(null)
+
+let tickTimer: ReturnType<typeof setInterval> | null = null
+function startTicker() {
+  if (tickTimer) return
+  tickTimer = setInterval(() => {
+    now.value = Date.now()
+  }, 1000)
+}
+function stopTicker() {
+  if (tickTimer) {
+    clearInterval(tickTimer)
+    tickTimer = null
+  }
+}
+watch(
+  () => connection.value?.qr_code_url,
+  (qr, prev) => {
+    if (qr && qr !== prev) qrDisplayedAt.value = Date.now()
+    if (!qr) qrDisplayedAt.value = null
+    if (qr && !isConnected.value) startTicker()
+    else stopTicker()
+  },
+  { immediate: true },
+)
+watch(isConnected, (c) => {
+  if (c) {
+    stopTicker()
+    qrDisplayedAt.value = null
+  }
+})
+onBeforeUnmount(stopTicker)
 
 const qrImageSrc = computed(() => {
   const raw = connection.value?.qr_code_url
@@ -21,14 +57,33 @@ const qrImageSrc = computed(() => {
   return raw.startsWith('data:') ? raw : `data:image/png;base64,${raw}`
 })
 
+const qrAgeMs = computed(() => {
+  if (!qrDisplayedAt.value) return 0
+  return Math.max(0, now.value - qrDisplayedAt.value)
+})
+
+const qrRemainingSec = computed(() =>
+  Math.max(0, Math.ceil((QR_LIFETIME_MS - qrAgeMs.value) / 1000)),
+)
+
 const qrExpired = computed(() => {
   const c = connection.value
   if (!c || isConnected.value) return false
   if (c.provider !== 'evolution') return false
   if (!c.qr_code_url) return true
   if (!c.updated_at) return false
-  const ageMs = Date.now() - new Date(c.updated_at).getTime()
-  return ageMs > 60_000
+  return qrAgeMs.value > QR_LIFETIME_MS
+})
+
+const qrProgressPct = computed(() => {
+  if (qrExpired.value) return 0
+  return Math.max(0, Math.min(100, (qrRemainingSec.value / (QR_LIFETIME_MS / 1000)) * 100))
+})
+
+const qrTimerColor = computed(() => {
+  if (qrRemainingSec.value <= 10) return 'text-destructive'
+  if (qrRemainingSec.value <= 20) return 'text-amber-500'
+  return 'text-emerald-500'
 })
 
 async function handleGenerate() {
@@ -67,10 +122,10 @@ const panelActive = computed(() => connection.value?.provider === 'evolution')
           class="h-2.5 w-2.5 rounded-full"
           :class="isConnected && panelActive ? 'bg-emerald-500' : 'bg-red-500'"
         />
-        {{ panelActive ? statusLabel : 'Evolution API (Baileys)' }}
+        {{ panelActive ? statusLabel : 'Evolution Go (whatsmeow)' }}
       </CardTitle>
       <CardDescription>
-        Conexão via QR Code. Não-oficial, feature-rich para automação.
+        Conexão via QR Code. Não-oficial, baseada em whatsmeow para automação.
       </CardDescription>
     </CardHeader>
 
@@ -85,7 +140,7 @@ const panelActive = computed(() => connection.value?.provider === 'evolution')
             <CheckCircle2 class="h-20 w-20 text-emerald-500" />
           </div>
           <p class="text-sm text-muted-foreground">
-            Seu WhatsApp está conectado via Evolution.
+            Seu WhatsApp está conectado via Evolution Go.
           </p>
           <Button
             variant="outline"
@@ -104,6 +159,25 @@ const panelActive = computed(() => connection.value?.provider === 'evolution')
             alt="QR Code WhatsApp"
             class="h-56 w-56 rounded-md bg-white p-3"
           />
+
+          <div class="flex w-56 flex-col items-center gap-1.5">
+            <div class="flex items-center gap-1.5 text-sm font-medium" :class="qrTimerColor">
+              <Clock class="h-4 w-4" />
+              <span>Expira em {{ qrRemainingSec }}s</span>
+            </div>
+            <div class="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                class="h-full rounded-full transition-all duration-1000 ease-linear"
+                :class="{
+                  'bg-emerald-500': qrRemainingSec > 20,
+                  'bg-amber-500': qrRemainingSec <= 20 && qrRemainingSec > 10,
+                  'bg-destructive': qrRemainingSec <= 10,
+                }"
+                :style="{ width: qrProgressPct + '%' }"
+              />
+            </div>
+          </div>
+
           <p class="text-sm text-muted-foreground">
             Escaneie o QR Code com seu WhatsApp para conectar.
           </p>

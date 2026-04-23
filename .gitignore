@@ -22,3 +22,6 @@ dist
 # Claude Code / MCP
 .claude/
 .mcp.json
+
+# n8n workflows (contêm credenciais de dev)
+n8n-workflows/

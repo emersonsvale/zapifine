@@ -1,13 +1,52 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { FileText, Check, CheckCheck } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { FileText, Check, CheckCheck, SmilePlus } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
 
 const props = defineProps<{ message: Message }>()
 
+const { reactMessage } = useChats()
+
+const reactOpen = ref(false)
+const reacting = ref(false)
+const reactionQuick = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+
 const isSent = computed(() => props.message.status === 'Enviada')
+const groupSender = computed(() => {
+  const m = props.message as unknown as {
+    ingrupo?: boolean | null
+    quemmandou?: string | null
+  }
+  if (isSent.value) return null
+  if (!m.ingrupo) return null
+  const raw = m.quemmandou?.trim()
+  if (!raw) return null
+  const beforeAt = raw.split('@')[0] ?? raw
+  const digits = beforeAt.replace(/\D/g, '')
+  return digits || beforeAt || null
+})
+
+const currentReaction = computed(
+  () => (props.message as unknown as { reacao?: string | null }).reacao?.trim() || null,
+)
+const canReact = computed(
+  () => !!(props.message as unknown as { id_mensagem?: string | null }).id_mensagem,
+)
+
+async function doReact(emoji: string) {
+  if (reacting.value) return
+  reactOpen.value = false
+  reacting.value = true
+  try {
+    await reactMessage(props.message, emoji)
+  } catch (err) {
+    console.warn('[react]', err)
+  } finally {
+    reacting.value = false
+  }
+}
 
 const timeFmt = new Intl.DateTimeFormat('pt-BR', {
   hour: '2-digit',
@@ -52,9 +91,35 @@ const formattedMessage = computed(() =>
 
 <template>
   <div
-    class="flex w-full"
+    class="group flex w-full items-end gap-1"
     :class="isSent ? 'justify-end' : 'justify-start'"
   >
+    <Popover v-if="isSent" v-model:open="reactOpen">
+      <PopoverTrigger as-child>
+        <button
+          type="button"
+          class="flex h-7 w-7 items-center justify-center rounded-full opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"
+          :class="{ 'opacity-100': reactOpen, 'cursor-not-allowed opacity-30': !canReact }"
+          :disabled="reacting || !canReact"
+          :title="canReact ? 'Reagir' : 'Mensagem sem ID (reagir indisponível)'"
+        >
+          <SmilePlus class="h-4 w-4 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent class="flex w-auto gap-1 p-1" side="top">
+        <button
+          v-for="e in reactionQuick"
+          :key="e"
+          type="button"
+          class="flex h-9 w-9 items-center justify-center rounded-md text-lg transition-transform hover:scale-125 hover:bg-accent"
+          :class="currentReaction === e ? 'bg-accent' : ''"
+          @click="doReact(e)"
+        >
+          {{ e }}
+        </button>
+      </PopoverContent>
+    </Popover>
+
     <div
       class="relative max-w-[75%] rounded-lg px-3 py-2 text-sm shadow-sm"
       :class="
@@ -63,6 +128,12 @@ const formattedMessage = computed(() =>
           : 'bg-card border'
       "
     >
+      <p
+        v-if="groupSender"
+        class="mb-1 text-xs font-semibold text-sky-500"
+      >
+        {{ groupSender }}
+      </p>
       <template v-if="isImage && message.midia_url">
         <img
           :src="message.midia_url"
@@ -121,6 +192,39 @@ const formattedMessage = computed(() =>
         <CheckCheck v-if="isSent" class="h-3 w-3" />
         <Check v-else class="h-3 w-3" />
       </div>
+
+      <span
+        v-if="currentReaction"
+        class="absolute -bottom-3 right-2 rounded-full border bg-background px-1.5 py-0.5 text-xs shadow-sm"
+      >
+        {{ currentReaction }}
+      </span>
     </div>
+
+    <Popover v-if="!isSent" v-model:open="reactOpen">
+      <PopoverTrigger as-child>
+        <button
+          type="button"
+          class="flex h-7 w-7 items-center justify-center rounded-full opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100"
+          :class="{ 'opacity-100': reactOpen, 'cursor-not-allowed opacity-30': !canReact }"
+          :disabled="reacting || !canReact"
+          :title="canReact ? 'Reagir' : 'Mensagem sem ID (reagir indisponível)'"
+        >
+          <SmilePlus class="h-4 w-4 text-muted-foreground" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent class="flex w-auto gap-1 p-1" side="top">
+        <button
+          v-for="e in reactionQuick"
+          :key="e"
+          type="button"
+          class="flex h-9 w-9 items-center justify-center rounded-md text-lg transition-transform hover:scale-125 hover:bg-accent"
+          :class="currentReaction === e ? 'bg-accent' : ''"
+          @click="doReact(e)"
+        >
+          {{ e }}
+        </button>
+      </PopoverContent>
+    </Popover>
   </div>
 </template>

@@ -116,23 +116,28 @@ export function useLeads() {
     email?: string
     colunaId: number
     observacao?: string
-  }) {
+  }): Promise<LeadRow> {
     if (!ctx.value.companyId || !ctx.value.funilId) {
       throw new Error('Empresa ou funil não configurado.')
     }
-    const { error } = await supabase.from('leads').insert({
-      nome_lead: input.nome.trim() || null,
-      numero_whatsapp_lead: input.numero.trim() || null,
-      'e-mail': input.email?.trim() || null,
-      observacao: input.observacao?.trim() || null,
-      coluna_id: input.colunaId,
-      funil_id: ctx.value.funilId,
-      companies_id: ctx.value.companyId,
-      user_id: authUser.value?.id ?? null,
-      ia_ativa: true,
-    })
+    const { data, error } = await supabase
+      .from('leads')
+      .insert({
+        nome_lead: input.nome.trim() || null,
+        numero_whatsapp_lead: input.numero.trim() || null,
+        'e-mail': input.email?.trim() || null,
+        observacao: input.observacao?.trim() || null,
+        coluna_id: input.colunaId,
+        funil_id: ctx.value.funilId,
+        companies_id: ctx.value.companyId,
+        user_id: authUser.value?.id ?? null,
+        ia_ativa: true,
+      })
+      .select('*')
+      .single()
     if (error) throw error
     await refreshLeads()
+    return data as LeadRow
   }
 
   async function deleteLead(leadId: number) {

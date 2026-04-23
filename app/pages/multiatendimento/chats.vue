@@ -7,6 +7,7 @@ import {
   Phone,
   MoreVertical,
   MessageCircle,
+  Users,
   Loader2,
   Bot,
   BotOff,
@@ -14,6 +15,13 @@ import {
   Trash2,
   Eye,
   Pencil,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  MapPin,
+  User as UserIcon,
+  BarChart3,
+  UserPlus,
+  Link2,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -29,6 +37,7 @@ const {
   selectedId,
   selectConversation,
   sendText,
+  sendRich,
   refreshConversations,
   convPending,
   msgsPending,
@@ -37,6 +46,43 @@ const {
   clearMessages,
   deleteConversation,
 } = useChats()
+
+const linkLeadOpen = ref(false)
+const hasLead = computed(() => !!selectedConversation.value?.leads?.id)
+
+function openLinkLead() {
+  if (!selectedConversation.value) return
+  linkLeadOpen.value = true
+}
+
+const attachMenuOpen = ref(false)
+const mediaOpen = ref(false)
+const linkOpen = ref(false)
+const locationOpen = ref(false)
+const contactOpen = ref(false)
+const pollOpen = ref(false)
+
+function openAttachment(kind: 'media' | 'link' | 'location' | 'contact' | 'poll') {
+  attachMenuOpen.value = false
+  if (kind === 'media') mediaOpen.value = true
+  else if (kind === 'link') linkOpen.value = true
+  else if (kind === 'location') locationOpen.value = true
+  else if (kind === 'contact') contactOpen.value = true
+  else if (kind === 'poll') pollOpen.value = true
+}
+
+async function onSendRich(
+  type: 'media' | 'link' | 'location' | 'contact' | 'poll',
+  payload: Record<string, unknown>,
+) {
+  errorMsg.value = ''
+  try {
+    await sendRich({ type, ...payload } as never)
+  } catch (err) {
+    errorMsg.value = err instanceof Error ? err.message : 'Falha ao enviar.'
+    throw err
+  }
+}
 
 const { leads, columns, refreshLeads } = useLeads()
 const { toast, confirm } = useAlerts()
@@ -199,6 +245,7 @@ function handleKeydown(e: KeyboardEvent) {
 const headerName = computed(() => {
   const c = selectedConversation.value
   if (!c) return ''
+  if (c.isgrupo) return c.grupoNome?.trim() || 'Grupo'
   return (
     c.leads?.nome_lead?.trim() ||
     c.leads?.numero_whatsapp_lead ||
@@ -206,16 +253,17 @@ const headerName = computed(() => {
     `#${c.id}`
   )
 })
-const headerNumber = computed(
-  () =>
-    selectedConversation.value?.leads?.numero_whatsapp_lead ??
-    selectedConversation.value?.remoteJid ??
-    '',
-)
+const headerNumber = computed(() => {
+  const c = selectedConversation.value
+  if (!c) return ''
+  if (c.isgrupo) return 'Grupo'
+  return c.leads?.numero_whatsapp_lead ?? c.remoteJid ?? ''
+})
 const headerInitial = computed(() => {
   const n = headerName.value
   return (n[0] ?? '?').toUpperCase()
 })
+const isGroupConv = computed(() => !!selectedConversation.value?.isgrupo)
 
 type Message = NonNullable<typeof messages.value>[number]
 type GroupedItem =
@@ -309,12 +357,19 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         <!-- Header -->
         <div class="flex shrink-0 items-center gap-3 border-b bg-background px-4 py-3">
           <Avatar class="h-10 w-10">
-            <AvatarFallback class="bg-muted text-sm font-medium">
-              {{ headerInitial }}
+            <AvatarFallback
+              class="text-sm font-medium"
+              :class="isGroupConv ? 'bg-sky-500/15 text-sky-500' : 'bg-muted'"
+            >
+              <Users v-if="isGroupConv" class="h-5 w-5" />
+              <span v-else>{{ headerInitial }}</span>
             </AvatarFallback>
           </Avatar>
           <div class="min-w-0 flex-1">
-            <p class="truncate text-sm font-semibold">{{ headerName }}</p>
+            <p class="flex items-center gap-1.5 truncate text-sm font-semibold">
+              <Users v-if="isGroupConv" class="h-3.5 w-3.5 shrink-0 text-sky-500" />
+              <span class="truncate">{{ headerName }}</span>
+            </p>
             <p class="truncate text-xs text-muted-foreground">
               {{ headerNumber }}
             </p>
@@ -344,14 +399,22 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-56">
-              <DropdownMenuItem @select="openLeadView">
-                <Eye class="h-4 w-4" />
-                Ver lead
-              </DropdownMenuItem>
-              <DropdownMenuItem @select="openLeadEdit">
-                <Pencil class="h-4 w-4" />
-                Editar lead
-              </DropdownMenuItem>
+              <template v-if="hasLead">
+                <DropdownMenuItem @select="openLeadView">
+                  <Eye class="h-4 w-4" />
+                  Ver lead
+                </DropdownMenuItem>
+                <DropdownMenuItem @select="openLeadEdit">
+                  <Pencil class="h-4 w-4" />
+                  Editar lead
+                </DropdownMenuItem>
+              </template>
+              <template v-else>
+                <DropdownMenuItem @select="openLinkLead">
+                  <Link2 class="h-4 w-4" />
+                  Vincular lead
+                </DropdownMenuItem>
+              </template>
               <DropdownMenuSeparator />
               <DropdownMenuItem @select="onClearMessages">
                 <Eraser class="h-4 w-4" />
@@ -414,9 +477,55 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         <div class="shrink-0 border-t bg-background p-3">
           <div class="flex items-end gap-2">
             <ChatsEmojiPicker @pick="insertEmoji" />
-            <Button variant="ghost" size="icon" title="Anexar (em breve)" disabled>
-              <Paperclip class="h-4 w-4" />
-            </Button>
+            <Popover v-model:open="attachMenuOpen">
+              <PopoverTrigger as-child>
+                <Button variant="ghost" size="icon" title="Anexar">
+                  <Paperclip class="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="start" class="w-56 p-1">
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  @click="openAttachment('media')"
+                >
+                  <ImageIcon class="h-4 w-4 text-violet-500" />
+                  Mídia (foto/vídeo/arquivo)
+                </button>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  @click="openAttachment('link')"
+                >
+                  <LinkIcon class="h-4 w-4 text-sky-500" />
+                  Link
+                </button>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  @click="openAttachment('location')"
+                >
+                  <MapPin class="h-4 w-4 text-emerald-500" />
+                  Localização
+                </button>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  @click="openAttachment('contact')"
+                >
+                  <UserIcon class="h-4 w-4 text-amber-500" />
+                  Contato
+                </button>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  @click="openAttachment('poll')"
+                >
+                  <BarChart3 class="h-4 w-4 text-pink-500" />
+                  Enquete
+                </button>
+              </PopoverContent>
+            </Popover>
             <textarea
               ref="inputEl"
               v-model="input"
@@ -458,6 +567,35 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       v-model:open="editOpen"
       :lead="leadForDialog"
       :columns="columns ?? []"
+    />
+
+    <ChatsSendMediaDialog
+      v-model:open="mediaOpen"
+      @submit="(p) => onSendRich('media', p)"
+    />
+    <ChatsSendLinkDialog
+      v-model:open="linkOpen"
+      @submit="(p) => onSendRich('link', p)"
+    />
+    <ChatsSendLocationDialog
+      v-model:open="locationOpen"
+      @submit="(p) => onSendRich('location', p)"
+    />
+    <ChatsSendContactDialog
+      v-model:open="contactOpen"
+      @submit="(p) => onSendRich('contact', p)"
+    />
+    <ChatsSendPollDialog
+      v-model:open="pollOpen"
+      @submit="(p) => onSendRich('poll', p)"
+    />
+
+    <ChatsLinkLeadDialog
+      v-model:open="linkLeadOpen"
+      :conversation-id="selectedConversation?.id ?? null"
+      :default-number="selectedConversation?.leads?.numero_whatsapp_lead ?? selectedConversation?.remoteJid ?? null"
+      :default-name="selectedConversation?.leads?.nome_lead ?? null"
+      @linked="refreshConversations"
     />
   </div>
 </template>

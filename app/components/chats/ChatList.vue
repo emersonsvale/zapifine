@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Search } from 'lucide-vue-next'
+import { Search, Users } from 'lucide-vue-next'
 
 type Conv = {
   id: number
@@ -16,6 +16,8 @@ type Conv = {
   last_message_tipo: string | null
   last_message_status: string | null
   unread_count: number
+  isgrupo?: boolean
+  grupoNome?: string | null
 }
 
 const props = defineProps<{
@@ -33,6 +35,7 @@ const filtered = computed(() =>
     const q = search.value.trim().toLowerCase()
     if (!q) return true
     const hay = [
+      c.grupoNome,
       c.leads?.nome_lead,
       c.leads?.numero_whatsapp_lead,
       c.remoteJid,
@@ -50,6 +53,7 @@ function initial(name: string | null, fallback: string) {
 }
 
 function displayName(c: Conv) {
+  if (c.isgrupo) return c.grupoNome?.trim() || 'Grupo'
   return (
     c.leads?.nome_lead?.trim() ||
     c.leads?.numero_whatsapp_lead ||
@@ -59,6 +63,7 @@ function displayName(c: Conv) {
 }
 
 function displayNumber(c: Conv) {
+  if (c.isgrupo) return 'Grupo'
   return c.leads?.numero_whatsapp_lead ?? c.remoteJid ?? ''
 }
 
@@ -145,14 +150,19 @@ function previewText(c: Conv) {
             @click="emit('select', c.id)"
           >
             <Avatar class="h-11 w-11 shrink-0">
-              <AvatarFallback class="bg-muted text-sm font-medium">
-                {{ initial(c.leads?.nome_lead ?? null, `#${c.id}`) }}
+              <AvatarFallback
+                class="text-sm font-medium"
+                :class="c.isgrupo ? 'bg-sky-500/15 text-sky-500' : 'bg-muted'"
+              >
+                <Users v-if="c.isgrupo" class="h-5 w-5" />
+                <span v-else>{{ initial(c.leads?.nome_lead ?? null, `#${c.id}`) }}</span>
               </AvatarFallback>
             </Avatar>
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
-                <p class="truncate text-sm font-medium">
-                  {{ displayName(c) }}
+                <p class="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium">
+                  <Users v-if="c.isgrupo" class="h-3.5 w-3.5 shrink-0 text-sky-500" />
+                  <span class="truncate">{{ displayName(c) }}</span>
                 </p>
                 <span
                   class="shrink-0 text-[11px]"
