@@ -41,36 +41,5 @@ export function useUnreadChats() {
 
   watch(companyId, () => fetchCount(), { immediate: true })
 
-  let channel: ReturnType<typeof supabase.channel> | null = null
-  if (import.meta.client) {
-    watch(
-      companyId,
-      async (cid) => {
-        if (channel) {
-          await supabase.removeChannel(channel)
-          channel = null
-        }
-        if (!cid) return
-        channel = supabase
-          .channel(`unread-company-${cid}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'whats_mensagens_conversa',
-            },
-            () => fetchCount(),
-          )
-          .subscribe()
-      },
-      { immediate: true },
-    )
-
-    onBeforeUnmount(async () => {
-      if (channel) await supabase.removeChannel(channel)
-    })
-  }
-
   return { unreadCount, refresh: fetchCount }
 }

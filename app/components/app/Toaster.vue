@@ -38,8 +38,9 @@ const classFor: Record<ToastKind, string> = {
           v-for="t in toasts"
           :key="t.id"
           class="pointer-events-auto flex items-start gap-3 rounded-lg border px-3 py-3 shadow-lg backdrop-blur-sm"
-          :class="classFor[t.kind]"
+          :class="[classFor[t.kind], t.onClick ? 'cursor-pointer transition hover:brightness-110' : '']"
           role="status"
+          @click="t.onClick && (t.onClick(), dismiss(t.id))"
         >
           <component
             :is="iconFor[t.kind]"
@@ -53,7 +54,7 @@ const classFor: Record<ToastKind, string> = {
           <button
             type="button"
             class="shrink-0 rounded-md p-0.5 text-current/70 transition hover:text-current"
-            @click="dismiss(t.id)"
+            @click.stop="dismiss(t.id)"
             aria-label="Fechar"
           >
             <X class="h-4 w-4" />

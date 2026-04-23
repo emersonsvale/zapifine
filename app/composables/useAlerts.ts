@@ -6,6 +6,7 @@ export type Toast = {
   title?: string
   message: string
   timeout: number
+  onClick?: () => void
 }
 
 export type ConfirmVariant = 'default' | 'danger'
@@ -32,7 +33,11 @@ export function useAlerts() {
     resolve: null,
   }))
 
-  function push(kind: ToastKind, message: string, opts?: { title?: string; timeout?: number }) {
+  function push(
+    kind: ToastKind,
+    message: string,
+    opts?: { title?: string; timeout?: number; onClick?: () => void },
+  ) {
     const id = ++seq
     const t: Toast = {
       id,
@@ -40,6 +45,7 @@ export function useAlerts() {
       title: opts?.title,
       message,
       timeout: opts?.timeout ?? (kind === 'error' ? 6000 : 4000),
+      onClick: opts?.onClick,
     }
     toasts.value = [...toasts.value, t]
     if (t.timeout > 0) {
@@ -52,15 +58,12 @@ export function useAlerts() {
     toasts.value = toasts.value.filter((t) => t.id !== id)
   }
 
+  type ToastOpts = { title?: string; timeout?: number; onClick?: () => void }
   const toast = {
-    success: (msg: string, opts?: { title?: string; timeout?: number }) =>
-      push('success', msg, opts),
-    error: (msg: string, opts?: { title?: string; timeout?: number }) =>
-      push('error', msg, opts),
-    info: (msg: string, opts?: { title?: string; timeout?: number }) =>
-      push('info', msg, opts),
-    warning: (msg: string, opts?: { title?: string; timeout?: number }) =>
-      push('warning', msg, opts),
+    success: (msg: string, opts?: ToastOpts) => push('success', msg, opts),
+    error: (msg: string, opts?: ToastOpts) => push('error', msg, opts),
+    info: (msg: string, opts?: ToastOpts) => push('info', msg, opts),
+    warning: (msg: string, opts?: ToastOpts) => push('warning', msg, opts),
   }
 
   function confirm(options: ConfirmOptions = {}): Promise<boolean> {
