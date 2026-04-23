@@ -13,7 +13,7 @@ type Lead = Database['public']['Tables']['leads']['Row']
 const props = defineProps<{ lead: Lead }>()
 const emit = defineEmits<{
   toggleIa: [id: number]
-  openWhatsapp: [lead: Lead]
+  openConversation: [lead: Lead]
   click: [lead: Lead]
 }>()
 
@@ -95,7 +95,7 @@ const hasIa = computed(() => props.lead.ia_ativa === true)
         type="button"
         class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-400 transition-colors hover:bg-emerald-500/25"
         title="Abrir conversa"
-        @click.stop="emit('openWhatsapp', lead)"
+        @click.stop="emit('openConversation', lead)"
       >
         <MessageCircle class="h-3 w-3" />
       </button>

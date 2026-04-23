@@ -9,6 +9,10 @@ type Column = Database['public']['Tables']['ff_colunas_funil']['Row']
 
 useHead({ title: 'Funis - Zapifine' })
 
+const supabase = useSupabaseClient<Database>()
+const router = useRouter()
+const { toast } = useAlerts()
+
 const {
   columns,
   leads,
@@ -76,12 +80,40 @@ async function handleToggleIa(id: number) {
   }
 }
 
-function openWhatsapp(lead: Lead) {
-  const raw = lead.numero_whatsapp_lead
-  if (!raw) return
-  const digits = raw.replace(/\D/g, '')
-  window.open(`https://wa.me/${digits}`, '_blank', 'noopener')
+async function openConversation(lead: Lead) {
+  const { data, error } = await supabase
+    .from('whats_conversa')
+    .select('id')
+    .eq('lead_id', lead.id)
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) {
+    toast.error('Falha ao buscar conversa.')
+    return
+  }
+  if (!data) {
+    toast.info('Este lead ainda não possui conversa no WhatsApp.')
+    return
+  }
+  router.push(`/multiatendimento/chats?conv=${data.id}`)
 }
+
+// Edit Lead dialog
+const editOpen = ref(false)
+const editLead = ref<Lead | null>(null)
+
+function openEditLead(lead: Lead) {
+  editLead.value = lead
+  editOpen.value = true
+}
+
+watch(editOpen, async (open, wasOpen) => {
+  if (!open && wasOpen) {
+    await refreshLeads()
+    editLead.value = null
+  }
+})
 
 // Add Lead dialog
 const addOpen = ref(false)
@@ -185,7 +217,8 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
                   :key="lead.id"
                   :lead="lead"
                   @toggle-ia="handleToggleIa"
-                  @open-whatsapp="openWhatsapp"
+                  @open-conversation="openConversation"
+                  @click="openEditLead"
                 />
               </VueDraggable>
             </ClientOnly>
@@ -218,6 +251,12 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
       v-model:open="addOpen"
       :coluna-id="addColumnId"
       :coluna-label="addColumnLabel"
+    />
+
+    <LeadsEditLeadDialog
+      v-model:open="editOpen"
+      :lead="editLead"
+      :columns="columns ?? []"
     />
   </div>
 </template>
