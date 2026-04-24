@@ -9,6 +9,7 @@ type Conv = {
     id: number
     nome_lead: string | null
     numero_whatsapp_lead: string | null
+    avatar_url?: string | null
   } | null
   created_at: string
   last_message: string | null
@@ -18,20 +19,28 @@ type Conv = {
   unread_count: number
   isgrupo?: boolean
   grupoNome?: string | null
+  assigned_to?: string | null
+  assigned_nome?: string | null
 }
 
 const props = defineProps<{
   conversations: Conv[]
   selectedId: number | null
   pending: boolean
+  currentUserId?: string | null
 }>()
+
+const filterMode = ref<'todas' | 'minhas' | 'sem'>('todas')
 
 const emit = defineEmits<{ select: [id: number] }>()
 
 const search = ref('')
 
-const filtered = computed(() =>
-  (props.conversations ?? []).filter((c) => {
+const filtered = computed(() => {
+  const uid = props.currentUserId ?? null
+  return (props.conversations ?? []).filter((c) => {
+    if (filterMode.value === 'minhas' && c.assigned_to !== uid) return false
+    if (filterMode.value === 'sem' && c.assigned_to) return false
     const q = search.value.trim().toLowerCase()
     if (!q) return true
     const hay = [
@@ -44,8 +53,18 @@ const filtered = computed(() =>
       .join(' ')
       .toLowerCase()
     return hay.includes(q)
-  }),
-)
+  })
+})
+
+const counts = computed(() => {
+  const uid = props.currentUserId ?? null
+  const all = props.conversations ?? []
+  return {
+    todas: all.length,
+    minhas: all.filter((c) => c.assigned_to === uid).length,
+    sem: all.filter((c) => !c.assigned_to).length,
+  }
+})
 
 function initial(name: string | null, fallback: string) {
   const n = name?.trim() || fallback
@@ -121,6 +140,32 @@ function previewText(c: Conv) {
           class="pl-9"
         />
       </div>
+      <div class="mt-2 flex items-center gap-1 text-xs">
+        <button
+          type="button"
+          class="rounded px-2 py-1 transition-colors"
+          :class="filterMode === 'todas' ? 'bg-muted font-semibold' : 'text-muted-foreground hover:bg-muted/50'"
+          @click="filterMode = 'todas'"
+        >
+          Todas ({{ counts.todas }})
+        </button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 transition-colors"
+          :class="filterMode === 'minhas' ? 'bg-muted font-semibold' : 'text-muted-foreground hover:bg-muted/50'"
+          @click="filterMode = 'minhas'"
+        >
+          Minhas ({{ counts.minhas }})
+        </button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 transition-colors"
+          :class="filterMode === 'sem' ? 'bg-muted font-semibold' : 'text-muted-foreground hover:bg-muted/50'"
+          @click="filterMode = 'sem'"
+        >
+          Sem atendente ({{ counts.sem }})
+        </button>
+      </div>
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto">
@@ -137,7 +182,7 @@ function previewText(c: Conv) {
         Nenhuma conversa.
       </p>
 
-      <ul>
+      <ul v-else>
         <li v-for="c in filtered" :key="c.id">
           <button
             type="button"
@@ -150,6 +195,11 @@ function previewText(c: Conv) {
             @click="emit('select', c.id)"
           >
             <Avatar class="h-11 w-11 shrink-0">
+              <AvatarImage
+                v-if="c.leads?.avatar_url"
+                :src="c.leads.avatar_url"
+                :alt="c.leads?.nome_lead ?? ''"
+              />
               <AvatarFallback
                 class="text-sm font-medium"
                 :class="c.isgrupo ? 'bg-sky-500/15 text-sky-500' : 'bg-muted'"

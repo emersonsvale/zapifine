@@ -16,6 +16,7 @@ type Conversation = {
     numero_whatsapp_lead: string | null
     resumo_lead: string | null
     ia_ativa: boolean
+    avatar_url: string | null
   } | null
   last_message: string | null
   last_message_at: string | null
@@ -24,6 +25,8 @@ type Conversation = {
   unread_count: number
   isgrupo: boolean
   grupoNome: string | null
+  assigned_to: string | null
+  assigned_nome: string | null
 }
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
@@ -100,11 +103,14 @@ export function useChats() {
         lead_numero: string | null
         lead_resumo: string | null
         lead_ia_ativa: boolean | null
+        lead_avatar_url: string | null
         last_message: string | null
         last_message_at: string | null
         last_message_tipo: string | null
         last_message_status: MsgStatus | null
         unread_count: number
+        assigned_to: string | null
+        assigned_nome: string | null
       }>
 
       const ids = rows.map((r) => r.id)
@@ -136,6 +142,7 @@ export function useChats() {
               numero_whatsapp_lead: r.lead_numero,
               resumo_lead: r.lead_resumo,
               ia_ativa: !!r.lead_ia_ativa,
+              avatar_url: r.lead_avatar_url ?? null,
             }
           : null,
         last_message: r.last_message,
@@ -145,29 +152,96 @@ export function useChats() {
         unread_count: Number(r.unread_count ?? 0),
         isgrupo: groupMap.get(r.id)?.isgrupo ?? false,
         grupoNome: groupMap.get(r.id)?.grupoNome ?? null,
+        assigned_to: r.assigned_to ?? null,
+        assigned_nome: r.assigned_nome ?? null,
       }))
     },
     { watch: [() => authUser.value?.id], default: () => [] },
   )
 
-  const {
-    data: messages,
-    refresh: refreshMessages,
-    pending: msgsPending,
-  } = useAsyncData<Message[]>(
-    'conversation-messages',
-    async () => {
-      if (!selectedId.value) return []
-      const { data, error } = await supabase
-        .from('whats_mensagens_conversa')
-        .select('*')
-        .eq('whats_conversa_id', selectedId.value)
-        .order('created_at', { ascending: true })
-      if (error) throw error
-      return data ?? []
-    },
-    { watch: [selectedId], default: () => [] },
-  )
+  const MSGS_PAGE_SIZE = 50
+
+  const messages = useState<Message[]>('chat-messages', () => [])
+  const msgsPending = useState<boolean>('chat-msgs-pending', () => false)
+  const msgsLoadingOlder = useState<boolean>('chat-msgs-loading-older', () => false)
+  const msgsHasMore = useState<boolean>('chat-msgs-has-more', () => false)
+
+  async function fetchMessagesPage(
+    conversaId: number,
+    before: { created_at: string; id: number } | null,
+    limit: number,
+  ): Promise<Message[]> {
+    let q = supabase
+      .from('whats_mensagens_conversa')
+      .select('*')
+      .eq('whats_conversa_id', conversaId)
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(limit)
+    if (before) {
+      q = q.or(
+        `created_at.lt.${before.created_at},and(created_at.eq.${before.created_at},id.lt.${before.id})`,
+      )
+    }
+    const { data, error } = await q
+    if (error) throw error
+    return (data ?? []).slice().reverse()
+  }
+
+  async function loadInitialMessages(conversaId: number) {
+    msgsPending.value = true
+    msgsHasMore.value = false
+    try {
+      const page = await fetchMessagesPage(conversaId, null, MSGS_PAGE_SIZE)
+      messages.value = page
+      msgsHasMore.value = page.length === MSGS_PAGE_SIZE
+    } finally {
+      msgsPending.value = false
+    }
+  }
+
+  async function loadOlderMessages() {
+    if (!selectedId.value) return
+    if (msgsLoadingOlder.value || !msgsHasMore.value) return
+    const list = messages.value ?? []
+    const oldest = list.find(
+      (m) => typeof m.id === 'number' && m.id > 0 && m.created_at,
+    )
+    if (!oldest) return
+    msgsLoadingOlder.value = true
+    try {
+      const page = await fetchMessagesPage(
+        selectedId.value,
+        { created_at: oldest.created_at as string, id: oldest.id as number },
+        MSGS_PAGE_SIZE,
+      )
+      if (page.length < MSGS_PAGE_SIZE) msgsHasMore.value = false
+      if (page.length === 0) return
+      const seen = new Set(list.map((m) => m.id))
+      const merged = [...page.filter((m) => !seen.has(m.id)), ...list]
+      messages.value = merged
+    } finally {
+      msgsLoadingOlder.value = false
+    }
+  }
+
+  async function refreshMessages() {
+    if (!selectedId.value) {
+      messages.value = []
+      msgsHasMore.value = false
+      return
+    }
+    await loadInitialMessages(selectedId.value)
+  }
+
+  watch(selectedId, async (id) => {
+    if (!id) {
+      messages.value = []
+      msgsHasMore.value = false
+      return
+    }
+    await loadInitialMessages(id)
+  })
 
   const selectedConversation = computed<Conversation | null>(() => {
     return (
@@ -257,6 +331,170 @@ export function useChats() {
       }
       throw err
     }
+  }
+
+  async function editMessage(message: Message, newText: string) {
+    const c = selectedConversation.value
+    if (!c || !companyId.value) throw new Error('Sem conversa selecionada.')
+    const idMensagem = (message as unknown as { id_mensagem?: string | null }).id_mensagem
+    if (!idMensagem) throw new Error('Mensagem sem ID do WhatsApp (não pode editar).')
+    const chat = c.remoteJid ?? c.leads?.numero_whatsapp_lead ?? null
+    if (!chat) throw new Error('Chat (remoteJid) inválido.')
+    const trimmed = newText.trim()
+    if (!trimmed) throw new Error('Mensagem vazia.')
+    const prevText = (message as unknown as { mensagem?: string | null }).mensagem ?? ''
+    if (trimmed === prevText.trim()) return
+
+    const list = messages.value ?? []
+    const idx = list.findIndex((m) => m.id === message.id)
+    if (idx !== -1) {
+      const next = list.slice()
+      next[idx] = { ...(next[idx] as any), mensagem: trimmed, editada: true } as Message
+      messages.value = next
+    }
+
+    try {
+      const { data: fnData, error } = await supabase.functions.invoke(
+        'edit_whatsapp_message',
+        {
+          method: 'POST',
+          body: {
+            company_id: companyId.value,
+            chat,
+            message: trimmed,
+            messageId: idMensagem,
+          },
+        },
+      )
+      if (error) throw new Error(error.message)
+      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
+        throw new Error(String((fnData as { error: unknown }).error))
+      }
+      const { error: updErr } = await supabase
+        .from('whats_mensagens_conversa')
+        .update({ mensagem: trimmed, editada: true } as never)
+        .eq('id', message.id)
+      if (updErr) throw updErr
+    } catch (err) {
+      if (idx !== -1) {
+        const rollback = (messages.value ?? []).slice()
+        rollback[idx] = { ...(rollback[idx] as any), mensagem: prevText, editada: (message as any).editada ?? false } as Message
+        messages.value = rollback
+      }
+      throw err
+    }
+  }
+
+  async function deleteMessage(message: Message) {
+    const c = selectedConversation.value
+    if (!c || !companyId.value) throw new Error('Sem conversa selecionada.')
+    const idMensagem = (message as unknown as { id_mensagem?: string | null }).id_mensagem
+    if (!idMensagem) throw new Error('Mensagem sem ID do WhatsApp (não pode apagar).')
+    const chat = c.remoteJid ?? c.leads?.numero_whatsapp_lead ?? null
+    if (!chat) throw new Error('Chat (remoteJid) inválido.')
+
+    const list = messages.value ?? []
+    const idx = list.findIndex((m) => m.id === message.id)
+    const prev = idx !== -1 ? { ...(list[idx] as any) } : null
+    if (idx !== -1) {
+      const next = list.slice()
+      next[idx] = { ...(next[idx] as any), deletada: true } as Message
+      messages.value = next
+    }
+
+    try {
+      const { data: fnData, error } = await supabase.functions.invoke(
+        'delete_whatsapp_message',
+        {
+          method: 'POST',
+          body: {
+            company_id: companyId.value,
+            chat,
+            messageId: idMensagem,
+          },
+        },
+      )
+      if (error) throw new Error(error.message)
+      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
+        throw new Error(String((fnData as { error: unknown }).error))
+      }
+      const { error: updErr } = await supabase
+        .from('whats_mensagens_conversa')
+        .update({ deletada: true } as never)
+        .eq('id', message.id)
+      if (updErr) throw updErr
+    } catch (err) {
+      if (idx !== -1 && prev) {
+        const rollback = (messages.value ?? []).slice()
+        rollback[idx] = prev as Message
+        messages.value = rollback
+      }
+      throw err
+    }
+  }
+
+  async function sendNote(text: string) {
+    const c = selectedConversation.value
+    if (!c) throw new Error('Sem conversa selecionada.')
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const { data: inserted, error } = await supabase
+      .from('whats_mensagens_conversa')
+      .insert({
+        whats_conversa_id: c.id,
+        lead_id: c.lead_id,
+        sender: authUser.value?.id ?? null,
+        mensagem: trimmed,
+        tipo: 'note',
+        status: 'Enviada',
+        interna: true,
+      } as never)
+      .select()
+      .single()
+    if (error) throw error
+    if (inserted) {
+      messages.value = [...(messages.value ?? []), inserted as Message]
+    }
+  }
+
+  async function assignConversation(
+    conversationId: number,
+    userId: string | null,
+  ) {
+    const list = conversations.value ?? []
+    const idx = list.findIndex((c) => c.id === conversationId)
+    const prev = idx !== -1 ? list[idx]! : null
+    if (prev) {
+      const assignedNome = userId
+        ? authUser.value?.id === userId
+          ? ((authUser.value?.user_metadata as { nome?: string })?.nome ?? 'Você')
+          : prev.assigned_nome
+        : null
+      const next = list.slice()
+      next[idx] = {
+        ...prev,
+        assigned_to: userId,
+        assigned_nome: assignedNome,
+      }
+      conversations.value = next
+    }
+    const { error } = await supabase
+      .from('whats_conversa')
+      .update({
+        assigned_to: userId,
+        assigned_at: userId ? new Date().toISOString() : null,
+      } as never)
+      .eq('id', conversationId)
+    if (error) {
+      if (prev) {
+        const rollback = (conversations.value ?? []).slice()
+        const j = rollback.findIndex((c) => c.id === conversationId)
+        if (j !== -1) rollback[j] = prev
+        conversations.value = rollback
+      }
+      throw error
+    }
+    await refreshConversations()
   }
 
   async function linkLead(conversationId: number, leadId: number) {
@@ -350,6 +588,48 @@ export function useChats() {
       unreadGlobal.value = Math.max(0, (unreadGlobal.value ?? 0) - decrement)
     }
     await markConversationSeen(id)
+    ensureLeadAvatar(id)
+  }
+
+  const avatarInFlight = new Set<number>()
+  async function ensureLeadAvatar(conversationId: number) {
+    if (!companyId.value) return
+    const list = conversations.value ?? []
+    const conv = list.find((c) => c.id === conversationId)
+    if (!conv || !conv.leads?.id) return
+    if (conv.isgrupo) return
+    if (conv.leads.avatar_url) return
+    if (avatarInFlight.has(conv.leads.id)) return
+    const number =
+      conv.leads.numero_whatsapp_lead ?? conv.remoteJid ?? null
+    if (!number) return
+    avatarInFlight.add(conv.leads.id)
+    try {
+      const { data: fnData, error } = await supabase.functions.invoke<{
+        avatar_url: string | null
+      }>('fetch_lead_avatar', {
+        method: 'POST',
+        body: {
+          company_id: companyId.value,
+          lead_id: conv.leads.id,
+          number,
+        },
+      })
+      if (error) return
+      const url = fnData?.avatar_url ?? null
+      if (!url) return
+      const current = conversations.value ?? []
+      const next = current.map((c) =>
+        c.leads && c.leads.id === conv.leads!.id
+          ? { ...c, leads: { ...c.leads, avatar_url: url } }
+          : c,
+      )
+      conversations.value = next
+    } catch {
+      // silencioso — avatar é best-effort
+    } finally {
+      avatarInFlight.delete(conv.leads.id)
+    }
   }
 
   function extractNumber(raw: string | null | undefined): string | null {
@@ -364,7 +644,10 @@ export function useChats() {
     return digits
   }
 
-  async function sendText(text: string) {
+  async function sendText(
+    text: string,
+    opts: { quotedMessageId?: string | null } = {},
+  ) {
     const c = selectedConversation.value
     if (!c || !companyId.value) throw new Error('Sem conversa selecionada.')
     const number =
@@ -376,6 +659,7 @@ export function useChats() {
 
     const signature = await loadSignature(supabase, authUser.value?.id)
     const finalText = buildPrefixed(trimmed, signature)
+    const quotedMessageId = opts.quotedMessageId?.trim() || null
 
     // Optimistic insert
     const tempId = -Date.now()
@@ -389,6 +673,7 @@ export function useChats() {
       status: 'Enviada',
       lead_id: c.lead_id,
       whats_conversa_id: c.id,
+      quoted_message_id: quotedMessageId,
     } as unknown as Message
     messages.value = [...(messages.value ?? []), optimistic]
 
@@ -401,6 +686,9 @@ export function useChats() {
             company_id: companyId.value,
             number,
             text: finalText,
+            ...(quotedMessageId
+              ? { quoted_message_id: quotedMessageId, quoted_chat: c.remoteJid ?? undefined }
+              : {}),
           },
         },
       )
@@ -422,20 +710,29 @@ export function useChats() {
       const messageId =
         (fnData as { _messageId?: string | null } | null)?._messageId ?? null
 
-      const { data: inserted, error: insertErr } = await supabase
-        .from('whats_mensagens_conversa')
-        .insert({
-          whats_conversa_id: c.id,
-          lead_id: c.lead_id,
-          sender: authUser.value?.id ?? null,
-          mensagem: finalText,
-          tipo: 'text',
-          status: 'Enviada',
-          id_mensagem: messageId,
-        } as never)
-        .select()
-        .single()
-      if (insertErr) throw insertErr
+      const row = {
+        whats_conversa_id: c.id,
+        lead_id: c.lead_id,
+        sender: authUser.value?.id ?? null,
+        mensagem: finalText,
+        tipo: 'text',
+        status: 'Enviada',
+        id_mensagem: messageId,
+        quoted_message_id: quotedMessageId,
+      }
+      const query = messageId
+        ? supabase
+            .from('whats_mensagens_conversa')
+            .upsert(row as never, {
+              onConflict: 'id_mensagem',
+              ignoreDuplicates: false,
+            } as never)
+        : supabase.from('whats_mensagens_conversa').insert(row as never)
+      const { data: inserted, error: insertErr } = await query.select().single()
+      if (insertErr) {
+        console.error('[sendText] insert error', insertErr, 'row:', row)
+        throw insertErr
+      }
 
       const list = messages.value ?? []
       const idx = list.findIndex((m) => m.id === tempId)
@@ -548,21 +845,29 @@ export function useChats() {
       const messageId =
         (fnData as { _messageId?: string | null } | null)?._messageId ?? null
 
-      const { data: inserted, error: insertErr } = await supabase
-        .from('whats_mensagens_conversa')
-        .insert({
-          whats_conversa_id: c.id,
-          lead_id: c.lead_id,
-          sender: authUser.value?.id ?? null,
-          mensagem: preview.mensagem,
-          tipo: preview.tipo,
-          midia_url: preview.midia_url,
-          status: 'Enviada',
-          id_mensagem: messageId,
-        } as never)
-        .select()
-        .single()
-      if (insertErr) throw insertErr
+      const row = {
+        whats_conversa_id: c.id,
+        lead_id: c.lead_id,
+        sender: authUser.value?.id ?? null,
+        mensagem: preview.mensagem,
+        tipo: preview.tipo,
+        midia_url: preview.midia_url,
+        status: 'Enviada',
+        id_mensagem: messageId,
+      }
+      const query = messageId
+        ? supabase
+            .from('whats_mensagens_conversa')
+            .upsert(row as never, {
+              onConflict: 'id_mensagem',
+              ignoreDuplicates: false,
+            } as never)
+        : supabase.from('whats_mensagens_conversa').insert(row as never)
+      const { data: inserted, error: insertErr } = await query.select().single()
+      if (insertErr) {
+        console.error('[sendRich] insert error', insertErr, 'row:', row)
+        throw insertErr
+      }
 
       const list = messages.value ?? []
       const idx = list.findIndex((m) => m.id === tempId)
@@ -578,9 +883,94 @@ export function useChats() {
     }
   }
 
+  // Presence state (digitando/gravando)
+  const presenceState = useState<string | null>('chat-presence-state', () => null)
+  const presenceMedia = useState<string | null>('chat-presence-media', () => null)
+  const presenceUpdatedAt = useState<number>('chat-presence-updated-at', () => 0)
+  let presenceExpireTimer: ReturnType<typeof setTimeout> | null = null
+
+  const PRESENCE_TTL_MS = 15_000
+
+  function scheduleExpirePresence() {
+    if (presenceExpireTimer) clearTimeout(presenceExpireTimer)
+    presenceExpireTimer = setTimeout(() => {
+      if (Date.now() - presenceUpdatedAt.value >= PRESENCE_TTL_MS) {
+        presenceState.value = null
+        presenceMedia.value = null
+      }
+    }, PRESENCE_TTL_MS + 100)
+  }
+
+  function applyPresenceRow(row: {
+    conversa_id: number
+    state: string | null
+    media: string | null
+    updated_at: string | null
+  }) {
+    const ts = row.updated_at ? new Date(row.updated_at).getTime() : Date.now()
+    presenceUpdatedAt.value = ts
+    presenceState.value = row.state ?? null
+    presenceMedia.value = row.media ?? null
+    scheduleExpirePresence()
+  }
+
+  function patchConversationFromMessage(row: Message) {
+    const convId = (row as unknown as { whats_conversa_id?: number | null })
+      .whats_conversa_id
+    if (!convId) return
+    const list = conversations.value ?? []
+    const idx = list.findIndex((c) => c.id === convId)
+    if (idx === -1) {
+      // Conversa fora da lista — ainda não carregada. Refresh fallback.
+      refreshConversations()
+      return
+    }
+    const isRecebida = row.status === 'Recebida'
+    const isOpen = selectedId.value === convId
+    const prev = list[idx]!
+    const patched: Conversation = {
+      ...prev,
+      last_message: row.mensagem ?? prev.last_message,
+      last_message_at: (row.created_at as string) ?? prev.last_message_at,
+      last_message_tipo: (row.tipo as string | null) ?? prev.last_message_tipo,
+      last_message_status: row.status ?? prev.last_message_status,
+      unread_count:
+        isRecebida && !isOpen
+          ? (prev.unread_count ?? 0) + 1
+          : prev.unread_count ?? 0,
+    }
+    const rest = list.slice(0, idx).concat(list.slice(idx + 1))
+    // Reordena: conversa patcheada no topo (ordenação por last_message_at desc).
+    conversations.value = [patched, ...rest]
+    if (isRecebida && !isOpen) {
+      unreadGlobal.value = (unreadGlobal.value ?? 0) + 1
+    }
+  }
+
+  function patchConversationFromRow(row: Record<string, unknown>) {
+    const convId = row.id as number | undefined
+    if (!convId) return
+    const list = conversations.value ?? []
+    const idx = list.findIndex((c) => c.id === convId)
+    if (idx === -1) {
+      refreshConversations()
+      return
+    }
+    const prev = list[idx]!
+    const nextLeadId =
+      (row.lead_id as number | null | undefined) ?? prev.lead_id
+    if (nextLeadId !== prev.lead_id) {
+      // Vínculo de lead mudou — precisa buscar dados do lead via RPC.
+      refreshConversations()
+      return
+    }
+    // Sem mudança relevante pro header — mantém.
+  }
+
   // Realtime subscriptions
   let threadChannel: ReturnType<typeof supabase.channel> | null = null
   let globalChannel: ReturnType<typeof supabase.channel> | null = null
+  let presenceChannel: ReturnType<typeof supabase.channel> | null = null
 
   async function syncRealtimeAuth() {
     try {
@@ -605,6 +995,17 @@ export function useChats() {
         if (threadChannel) {
           await supabase.removeChannel(threadChannel)
           threadChannel = null
+        }
+        if (presenceChannel) {
+          await supabase.removeChannel(presenceChannel)
+          presenceChannel = null
+        }
+        presenceState.value = null
+        presenceMedia.value = null
+        presenceUpdatedAt.value = 0
+        if (presenceExpireTimer) {
+          clearTimeout(presenceExpireTimer)
+          presenceExpireTimer = null
         }
         if (!id) return
         await syncRealtimeAuth()
@@ -648,6 +1049,40 @@ export function useChats() {
               console.warn('[useChats] thread channel status:', status)
             }
           })
+
+        // Presence channel para conversa aberta
+        presenceChannel = supabase
+          .channel(`presence-${id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'whats_presence',
+              filter: `conversa_id=eq.${id}`,
+            },
+            (payload) => {
+              const row = (payload.new ?? payload.old) as {
+                conversa_id: number
+                state: string | null
+                media: string | null
+                updated_at: string | null
+              }
+              if (!row) return
+              applyPresenceRow(row)
+            },
+          )
+          .subscribe()
+
+        // Fetch inicial do estado atual
+        try {
+          const { data: presRow } = await supabase
+            .from('whats_presence' as never)
+            .select('conversa_id, state, media, updated_at')
+            .eq('conversa_id', id)
+            .maybeSingle()
+          if (presRow) applyPresenceRow(presRow as never)
+        } catch {}
       },
       { immediate: true },
     )
@@ -673,6 +1108,7 @@ export function useChats() {
               filter: `companies_id=eq.${cid}`,
             },
             () => {
+              // Conversa nova — precisa buscar join lead + whats_conversa.
               refreshConversations()
             },
           )
@@ -684,8 +1120,8 @@ export function useChats() {
               table: 'whats_conversa',
               filter: `companies_id=eq.${cid}`,
             },
-            () => {
-              refreshConversations()
+            (payload) => {
+              patchConversationFromRow(payload.new as Record<string, unknown>)
             },
           )
           .on(
@@ -695,9 +1131,8 @@ export function useChats() {
               schema: 'public',
               table: 'whats_mensagens_conversa',
             },
-            () => {
-              // Qualquer nova mensagem → reordena lista (preview + created_at).
-              refreshConversations()
+            (payload) => {
+              patchConversationFromMessage(payload.new as Message)
             },
           )
           .subscribe((status) => {
@@ -723,6 +1158,8 @@ export function useChats() {
       window.removeEventListener('focus', onVisible)
       if (threadChannel) await supabase.removeChannel(threadChannel)
       if (globalChannel) await supabase.removeChannel(globalChannel)
+      if (presenceChannel) await supabase.removeChannel(presenceChannel)
+      if (presenceExpireTimer) clearTimeout(presenceExpireTimer)
     })
   }
 
@@ -735,6 +1172,10 @@ export function useChats() {
     sendText,
     sendRich,
     reactMessage,
+    editMessage,
+    deleteMessage,
+    assignConversation,
+    sendNote,
     linkLead,
     refreshConversations,
     refreshMessages,
@@ -745,5 +1186,10 @@ export function useChats() {
     togglingIa,
     clearMessages,
     deleteConversation,
+    presenceState,
+    presenceMedia,
+    loadOlderMessages,
+    msgsHasMore,
+    msgsLoadingOlder,
   }
 }

@@ -1609,35 +1609,62 @@ export type Database = {
       whats_mensagens_conversa: {
         Row: {
           created_at: string
+          deletada: boolean | null
+          editada: boolean | null
+          interna: boolean | null
           id: number
+          id_mensagem: string | null
+          ingrupo: boolean | null
           lead_id: number | null
           mensagem: string | null
           midia_url: string | null
+          quemmandou: string | null
+          quoted_message_id: string | null
+          reacao: string | null
           sender: string | null
           status: Database["public"]["Enums"]["enum_status_mensagem"] | null
           tipo: string | null
+          visto: boolean | null
           whats_conversa_id: number | null
         }
         Insert: {
           created_at?: string
+          deletada?: boolean | null
+          editada?: boolean | null
+          interna?: boolean | null
           id?: number
+          id_mensagem?: string | null
+          ingrupo?: boolean | null
           lead_id?: number | null
           mensagem?: string | null
           midia_url?: string | null
+          quemmandou?: string | null
+          quoted_message_id?: string | null
+          reacao?: string | null
           sender?: string | null
           status?: Database["public"]["Enums"]["enum_status_mensagem"] | null
           tipo?: string | null
+          visto?: boolean | null
           whats_conversa_id?: number | null
         }
         Update: {
           created_at?: string
+          deletada?: boolean | null
+          editada?: boolean | null
+          interna?: boolean | null
           id?: number
+          id_mensagem?: string | null
+          ingrupo?: boolean | null
           lead_id?: number | null
           mensagem?: string | null
           midia_url?: string | null
+          quemmandou?: string | null
+          quoted_message_id?: string | null
+          reacao?: string | null
           sender?: string | null
           status?: Database["public"]["Enums"]["enum_status_mensagem"] | null
           tipo?: string | null
+          visto?: boolean | null
           whats_conversa_id?: number | null
         }
         Relationships: [
@@ -1968,7 +1995,7 @@ export type Database = {
         | "atencao"
         | "pagamento"
       enum_status_agenda: "Confirmado" | "Pendente" | "Cancelado"
-      enum_status_mensagem: "Recebida" | "Enviada"
+      enum_status_mensagem: "Recebida" | "Enviada" | "Entregue" | "Lida"
       enum_status_pgto: "Pendente" | "Paga" | "Cancelada" | "Vencida"
       enum_status_user: "Ativo" | "Bloqueado" | "Desativado"
       enum_tipo_lembretes: "Agendamento" | "Confirmação"
@@ -2112,7 +2139,7 @@ export const Constants = {
         "pagamento",
       ],
       enum_status_agenda: ["Confirmado", "Pendente", "Cancelado"],
-      enum_status_mensagem: ["Recebida", "Enviada"],
+      enum_status_mensagem: ["Recebida", "Enviada", "Entregue", "Lida"],
       enum_status_pgto: ["Pendente", "Paga", "Cancelada", "Vencida"],
       enum_status_user: ["Ativo", "Bloqueado", "Desativado"],
       enum_tipo_lembretes: ["Agendamento", "Confirmação"],

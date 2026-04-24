@@ -22,6 +22,7 @@ import {
   BarChart3,
   UserPlus,
   Link2,
+  X,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -38,6 +39,7 @@ const {
   selectConversation,
   sendText,
   sendRich,
+  sendNote,
   refreshConversations,
   convPending,
   msgsPending,
@@ -45,7 +47,73 @@ const {
   togglingIa,
   clearMessages,
   deleteConversation,
+  presenceState,
+  presenceMedia,
+  loadOlderMessages,
+  msgsHasMore,
+  msgsLoadingOlder,
+  assignConversation,
 } = useChats()
+
+const authUser = useSupabaseUser()
+
+const isAssignedToMe = computed(
+  () => !!selectedConversation.value?.assigned_to &&
+    selectedConversation.value?.assigned_to === authUser.value?.id,
+)
+const assignedBadgeLabel = computed(() => {
+  const c = selectedConversation.value
+  if (!c?.assigned_to) return null
+  if (c.assigned_to === authUser.value?.id) return 'Você'
+  return c.assigned_nome ?? 'outro atendente'
+})
+const assigning = ref(false)
+
+async function onAssignMe() {
+  const c = selectedConversation.value
+  if (!c || assigning.value) return
+  assigning.value = true
+  try {
+    await assignConversation(c.id, authUser.value?.id ?? null)
+    toast.success('Conversa atribuída a você.')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao atribuir.')
+  } finally {
+    assigning.value = false
+  }
+}
+
+async function onAssignRelease() {
+  const c = selectedConversation.value
+  if (!c || assigning.value) return
+  assigning.value = true
+  try {
+    await assignConversation(c.id, null)
+    toast.success('Conversa liberada.')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao liberar.')
+  } finally {
+    assigning.value = false
+  }
+}
+
+const messagesScrollEl = ref<HTMLDivElement | null>(null)
+
+function onMessagesScroll() {
+  const el = messagesScrollEl.value
+  if (!el) return
+  if (!msgsHasMore.value || msgsLoadingOlder.value) return
+  // flex-col-reverse: scroll visual pra cima = scrollTop cresce.
+  const threshold = 200
+  if (el.scrollTop >= el.scrollHeight - el.clientHeight - threshold) {
+    loadOlderMessages()
+  }
+}
+
+const presenceLabel = computed(() => {
+  if (presenceState.value !== 'composing') return ''
+  return presenceMedia.value === 'audio' ? 'gravando áudio...' : 'digitando...'
+})
 
 const linkLeadOpen = ref(false)
 const hasLead = computed(() => !!selectedConversation.value?.leads?.id)
@@ -200,6 +268,49 @@ const input = ref('')
 const inputEl = ref<HTMLTextAreaElement | null>(null)
 const sending = ref(false)
 const errorMsg = ref('')
+const inputMode = ref<'message' | 'note'>('message')
+
+type ThreadMessage = NonNullable<typeof messages.value>[number]
+const replyingTo = ref<ThreadMessage | null>(null)
+
+function startReply(m: ThreadMessage) {
+  replyingTo.value = m
+  nextTick(() => inputEl.value?.focus())
+}
+
+function cancelReply() {
+  replyingTo.value = null
+}
+
+watch(selectedId, () => {
+  replyingTo.value = null
+})
+
+const replyPreview = computed(() => {
+  const m = replyingTo.value
+  if (!m) return { sender: '', text: '' }
+  const tipo = (m.tipo ?? '').toLowerCase()
+  let text = m.mensagem ?? ''
+  if (!text) {
+    if (['image', 'imagem', 'photo', 'picture'].includes(tipo)) text = '📷 Imagem'
+    else if (['audio', 'voice', 'ptt'].includes(tipo)) text = '🎤 Áudio'
+    else if (tipo === 'video') text = '🎬 Vídeo'
+    else if (['document', 'file', 'pdf'].includes(tipo)) text = '📎 Documento'
+  }
+  return {
+    sender: m.status === 'Recebida' ? 'Lead' : 'Você',
+    text: text.replace(/[*_~`]/g, '').slice(0, 160),
+  }
+})
+
+const messagesByWaId = computed(() => {
+  const map = new Map<string, ThreadMessage>()
+  for (const m of messages.value ?? []) {
+    const waId = (m as unknown as { id_mensagem?: string | null }).id_mensagem
+    if (waId) map.set(waId, m)
+  }
+  return map
+})
 
 function insertEmoji(emoji: string) {
   const el = inputEl.value
@@ -224,12 +335,22 @@ async function send() {
   if (!text) return
   errorMsg.value = ''
   sending.value = true
+  input.value = ''
+  const quotedId = (replyingTo.value as unknown as { id_mensagem?: string | null })?.id_mensagem ?? null
+  const prevReply = replyingTo.value
+  replyingTo.value = null
+  const mode = inputMode.value
   try {
-    await sendText(text)
-    input.value = ''
+    if (mode === 'note') {
+      await sendNote(text)
+    } else {
+      await sendText(text, { quotedMessageId: quotedId })
+    }
   } catch (err) {
     errorMsg.value =
       err instanceof Error ? err.message : 'Falha ao enviar mensagem.'
+    input.value = text
+    replyingTo.value = prevReply
   } finally {
     sending.value = false
   }
@@ -336,6 +457,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         :conversations="conversations ?? []"
         :selected-id="selectedId"
         :pending="convPending"
+        :current-user-id="authUser?.id ?? null"
         @select="selectConversation"
       />
     </div>
@@ -357,6 +479,11 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         <!-- Header -->
         <div class="flex shrink-0 items-center gap-3 border-b bg-background px-4 py-3">
           <Avatar class="h-10 w-10">
+            <AvatarImage
+              v-if="selectedConversation?.leads?.avatar_url"
+              :src="selectedConversation.leads.avatar_url"
+              :alt="headerName"
+            />
             <AvatarFallback
               class="text-sm font-medium"
               :class="isGroupConv ? 'bg-sky-500/15 text-sky-500' : 'bg-muted'"
@@ -369,8 +496,21 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             <p class="flex items-center gap-1.5 truncate text-sm font-semibold">
               <Users v-if="isGroupConv" class="h-3.5 w-3.5 shrink-0 text-sky-500" />
               <span class="truncate">{{ headerName }}</span>
+              <span
+                v-if="assignedBadgeLabel"
+                class="rounded bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium text-sky-600"
+                :title="isAssignedToMe ? 'Você está atendendo' : 'Atribuída a outro atendente'"
+              >
+                {{ isAssignedToMe ? 'Minha' : assignedBadgeLabel }}
+              </span>
             </p>
-            <p class="truncate text-xs text-muted-foreground">
+            <p
+              v-if="presenceLabel"
+              class="truncate text-xs italic text-emerald-600"
+            >
+              {{ presenceLabel }}
+            </p>
+            <p v-else class="truncate text-xs text-muted-foreground">
               {{ headerNumber }}
             </p>
           </div>
@@ -399,6 +539,23 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-56">
+              <DropdownMenuItem
+                v-if="!selectedConversation?.assigned_to || !isAssignedToMe"
+                :disabled="assigning"
+                @select="onAssignMe"
+              >
+                <UserPlus class="h-4 w-4" />
+                Assumir conversa
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                v-if="selectedConversation?.assigned_to"
+                :disabled="assigning"
+                @select="onAssignRelease"
+              >
+                <UserIcon class="h-4 w-4" />
+                Liberar conversa
+              </DropdownMenuItem>
+              <DropdownMenuSeparator v-if="selectedConversation?.assigned_to || !isAssignedToMe" />
               <template v-if="hasLead">
                 <DropdownMenuItem @select="openLeadView">
                   <Eye class="h-4 w-4" />
@@ -446,7 +603,9 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         </p>
         <div
           v-else
+          ref="messagesScrollEl"
           class="flex min-h-0 flex-1 flex-col-reverse space-y-2 space-y-reverse overflow-y-auto px-4 py-4"
+          @scroll.passive="onMessagesScroll"
         >
           <template v-for="item in groupedMessages" :key="item.key">
             <div
@@ -462,8 +621,26 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             <ChatsChatMessage
               v-else
               :message="item.message"
+              :quoted-lookup="
+                item.message.quoted_message_id
+                  ? messagesByWaId.get(item.message.quoted_message_id) ?? null
+                  : null
+              "
+              @reply="startReply"
             />
           </template>
+          <div
+            v-if="msgsLoadingOlder"
+            class="flex justify-center py-2 text-xs text-muted-foreground"
+          >
+            Carregando mensagens anteriores...
+          </div>
+          <div
+            v-else-if="!msgsHasMore && messages && messages.length >= 20"
+            class="flex justify-center py-2 text-[10px] uppercase tracking-wide text-muted-foreground/60"
+          >
+            início da conversa
+          </div>
         </div>
 
         <p
@@ -474,7 +651,46 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         </p>
 
         <!-- Input -->
-        <div class="shrink-0 border-t bg-background p-3">
+        <div
+          class="shrink-0 border-t p-3"
+          :class="inputMode === 'note' ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-background'"
+        >
+          <div class="mb-2 flex gap-1 text-xs">
+            <button
+              type="button"
+              class="rounded px-2 py-1 font-medium transition-colors"
+              :class="inputMode === 'message' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted/60'"
+              @click="inputMode = 'message'"
+            >
+              Mensagem
+            </button>
+            <button
+              type="button"
+              class="rounded px-2 py-1 font-medium transition-colors"
+              :class="inputMode === 'note' ? 'bg-amber-500 text-white' : 'text-muted-foreground hover:bg-muted/60'"
+              title="Visível só para equipe — não envia WhatsApp"
+              @click="inputMode = 'note'"
+            >
+              Nota interna
+            </button>
+          </div>
+          <div
+            v-if="replyingTo && inputMode === 'message'"
+            class="mb-2 flex items-start gap-2 rounded-md border-l-4 border-emerald-500 bg-muted/50 px-3 py-2 text-xs"
+          >
+            <div class="min-w-0 flex-1">
+              <p class="font-semibold text-emerald-600">Respondendo a {{ replyPreview.sender }}</p>
+              <p class="truncate text-muted-foreground">{{ replyPreview.text }}</p>
+            </div>
+            <button
+              type="button"
+              class="rounded p-1 hover:bg-accent"
+              title="Cancelar resposta"
+              @click="cancelReply"
+            >
+              <X class="h-4 w-4" />
+            </button>
+          </div>
           <div class="flex items-end gap-2">
             <ChatsEmojiPicker @pick="insertEmoji" />
             <Popover v-model:open="attachMenuOpen">
@@ -530,8 +746,9 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               ref="inputEl"
               v-model="input"
               rows="1"
-              placeholder="Digite uma mensagem"
+              :placeholder="inputMode === 'note' ? 'Nota interna (só equipe vê)' : 'Digite uma mensagem'"
               class="max-h-40 min-h-[40px] flex-1 resize-none rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              :class="inputMode === 'note' ? 'border-amber-400' : ''"
               @keydown="handleKeydown"
             />
             <Button
