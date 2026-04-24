@@ -99,7 +99,32 @@ async function uploadAndSubmit() {
 
   if (file.value) {
     const f = file.value
-    const ext = f.name.includes('.') ? f.name.split('.').pop() : ''
+    const ext = (f.name.includes('.') ? f.name.split('.').pop() : '')?.toLowerCase() || ''
+    const inferredMime = (() => {
+      if (f.type && f.type !== 'text/plain' && f.type !== 'application/octet-stream') return f.type
+      const map: Record<string, string> = {
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        png: 'image/png',
+        gif: 'image/gif',
+        webp: 'image/webp',
+        heic: 'image/heic',
+        mp4: 'video/mp4',
+        mov: 'video/quicktime',
+        '3gp': 'video/3gpp',
+        ogg: 'audio/ogg',
+        mp3: 'audio/mpeg',
+        m4a: 'audio/mp4',
+        aac: 'audio/aac',
+        pdf: 'application/pdf',
+        doc: 'application/msword',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xls: 'application/vnd.ms-excel',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        txt: 'text/plain',
+      }
+      return map[ext] || 'application/octet-stream'
+    })()
     const companyFolder = (authUser.value?.user_metadata as { companie_id?: string })?.companie_id ?? 'shared'
     const path = `${companyFolder}/${crypto.randomUUID()}${ext ? '.' + ext : ''}`
     uploading.value = true
@@ -110,14 +135,14 @@ async function uploadAndSubmit() {
         .upload(path, f, {
           cacheControl: '3600',
           upsert: false,
-          contentType: f.type || undefined,
+          contentType: inferredMime,
         })
       if (upErr) throw upErr
       progress.value = 80
       const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path)
       finalUrl = urlData.publicUrl
       filename = f.name
-      mimetype = f.type || undefined
+      mimetype = inferredMime
       progress.value = 100
     } catch (e) {
       err.value = e instanceof Error ? e.message : 'Falha ao enviar arquivo.'
