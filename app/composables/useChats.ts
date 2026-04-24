@@ -1026,7 +1026,7 @@ export function useChats() {
         if (!id) return
         await syncRealtimeAuth()
         threadChannel = supabase
-          .channel(`conv-${id}`)
+          .channel(`conv-${id}-${Math.random().toString(36).slice(2, 8)}`)
           .on(
             'postgres_changes',
             {
@@ -1086,7 +1086,7 @@ export function useChats() {
 
         // Presence channel para conversa aberta
         presenceChannel = supabase
-          .channel(`presence-${id}`)
+          .channel(`presence-${id}-${Math.random().toString(36).slice(2, 8)}`)
           .on(
             'postgres_changes',
             {
@@ -1132,7 +1132,7 @@ export function useChats() {
         if (!cid) return
         await syncRealtimeAuth()
         globalChannel = supabase
-          .channel(`chats-company-${cid}`)
+          .channel(`chats-company-${cid}-${Math.random().toString(36).slice(2, 8)}`)
           .on(
             'postgres_changes',
             {
