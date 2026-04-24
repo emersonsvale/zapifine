@@ -1,57 +1,157 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { Loader2 } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
+import { Loader2, Upload, X, FileText } from 'lucide-vue-next'
+import type { Database } from '~~/types/database'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  submit: [payload: { url: string; caption?: string; filename?: string; mediaType?: string }]
+  submit: [payload: { url: string; caption?: string; filename?: string; mimetype?: string; mediaType?: string }]
 }>()
 
-const url = ref('')
+const MAX_BYTES = 16 * 1024 * 1024
+const supabase = useSupabaseClient<Database>()
+const authUser = useSupabaseUser()
+
+const file = ref<File | null>(null)
+const previewUrl = ref<string | null>(null)
 const caption = ref('')
-const filename = ref('')
-const mediaType = ref<'image' | 'video' | 'audio' | 'document'>('image')
-const sending = ref(false)
+const uploading = ref(false)
+const progress = ref(0)
 const err = ref('')
+const dragActive = ref(false)
+const urlFallback = ref('')
+
+const mediaType = computed<'image' | 'video' | 'audio' | 'document'>(() => {
+  const mime = file.value?.type ?? ''
+  if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  return 'document'
+})
+
+function resetState() {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  file.value = null
+  previewUrl.value = null
+  caption.value = ''
+  uploading.value = false
+  progress.value = 0
+  err.value = ''
+  urlFallback.value = ''
+}
 
 watch(
   () => props.open,
   (o) => {
-    if (o) {
-      url.value = ''
-      caption.value = ''
-      filename.value = ''
-      mediaType.value = 'image'
-      err.value = ''
-      sending.value = false
-    }
+    if (o) resetState()
   },
 )
 
-async function onSubmit() {
+function acceptFile(f: File | null) {
+  if (!f) return
   err.value = ''
-  const u = url.value.trim()
-  if (!u) {
-    err.value = 'URL da mídia é obrigatória.'
+  if (f.size > MAX_BYTES) {
+    err.value = 'Arquivo acima de 16MB (limite WhatsApp).'
     return
   }
-  sending.value = true
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  file.value = f
+  previewUrl.value = f.type.startsWith('image/') || f.type.startsWith('video/')
+    ? URL.createObjectURL(f)
+    : null
+}
+
+function onFileInput(e: Event) {
+  const input = e.target as HTMLInputElement
+  acceptFile(input.files?.[0] ?? null)
+  input.value = ''
+}
+
+function onDrop(e: DragEvent) {
+  e.preventDefault()
+  dragActive.value = false
+  acceptFile(e.dataTransfer?.files?.[0] ?? null)
+}
+
+function onPaste(e: ClipboardEvent) {
+  const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
+    i.type.startsWith('image/') || i.type.startsWith('video/'),
+  )
+  if (item) {
+    const f = item.getAsFile()
+    if (f) acceptFile(f)
+  }
+}
+
+function removeFile() {
+  if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+  file.value = null
+  previewUrl.value = null
+}
+
+async function uploadAndSubmit() {
+  err.value = ''
+
+  let finalUrl = ''
+  let filename: string | undefined
+  let mimetype: string | undefined
+
+  if (file.value) {
+    const f = file.value
+    const ext = f.name.includes('.') ? f.name.split('.').pop() : ''
+    const companyFolder = (authUser.value?.user_metadata as { companie_id?: string })?.companie_id ?? 'shared'
+    const path = `${companyFolder}/${crypto.randomUUID()}${ext ? '.' + ext : ''}`
+    uploading.value = true
+    progress.value = 10
+    try {
+      const { error: upErr } = await supabase.storage
+        .from('chat-media')
+        .upload(path, f, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: f.type || undefined,
+        })
+      if (upErr) throw upErr
+      progress.value = 80
+      const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path)
+      finalUrl = urlData.publicUrl
+      filename = f.name
+      mimetype = f.type || undefined
+      progress.value = 100
+    } catch (e) {
+      err.value = e instanceof Error ? e.message : 'Falha ao enviar arquivo.'
+      uploading.value = false
+      return
+    }
+    uploading.value = false
+  } else if (urlFallback.value.trim()) {
+    finalUrl = urlFallback.value.trim()
+  } else {
+    err.value = 'Selecione um arquivo ou cole uma URL.'
+    return
+  }
+
   try {
     await Promise.resolve(
       emit('submit', {
-        url: u,
+        url: finalUrl,
         caption: caption.value.trim() || undefined,
-        filename: filename.value.trim() || undefined,
+        filename,
+        mimetype,
         mediaType: mediaType.value,
       }),
     )
     emit('update:open', false)
   } catch (e) {
     err.value = e instanceof Error ? e.message : 'Falha ao enviar.'
-  } finally {
-    sending.value = false
   }
+}
+
+function prettySize(b: number) {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+  return `${(b / 1024 / 1024).toFixed(2)} MB`
 }
 </script>
 
@@ -61,29 +161,80 @@ async function onSubmit() {
       <DialogHeader>
         <DialogTitle>Enviar mídia</DialogTitle>
         <DialogDescription>
-          Cole a URL pública da imagem, vídeo, áudio ou documento.
+          Arraste um arquivo, cole (Ctrl+V) ou selecione. Máx 16MB.
         </DialogDescription>
       </DialogHeader>
 
-      <div class="space-y-3">
-        <div class="space-y-1.5">
-          <Label>Tipo</Label>
-          <Select v-model="mediaType">
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="image">Imagem</SelectItem>
-              <SelectItem value="video">Vídeo</SelectItem>
-              <SelectItem value="audio">Áudio</SelectItem>
-              <SelectItem value="document">Documento</SelectItem>
-            </SelectContent>
-          </Select>
+      <div class="space-y-3" @paste="onPaste">
+        <div
+          v-if="!file"
+          class="flex flex-col items-center justify-center rounded-md border-2 border-dashed px-4 py-6 transition-colors"
+          :class="dragActive ? 'border-primary bg-muted/40' : 'border-muted-foreground/30'"
+          @dragover.prevent="dragActive = true"
+          @dragleave.prevent="dragActive = false"
+          @drop="onDrop"
+        >
+          <Upload class="mb-2 h-8 w-8 text-muted-foreground" />
+          <p class="mb-2 text-sm text-muted-foreground">
+            Arraste aqui ou
+          </p>
+          <label class="cursor-pointer rounded bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90">
+            Escolher arquivo
+            <input
+              type="file"
+              class="hidden"
+              accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
+              @change="onFileInput"
+            />
+          </label>
         </div>
 
-        <div class="space-y-1.5">
-          <Label>URL</Label>
-          <Input v-model="url" placeholder="https://..." />
+        <div
+          v-else
+          class="relative rounded-md border bg-muted/30 p-3"
+        >
+          <button
+            type="button"
+            class="absolute right-2 top-2 rounded-full bg-background p-1 shadow-sm hover:bg-accent"
+            title="Remover"
+            @click="removeFile"
+          >
+            <X class="h-4 w-4" />
+          </button>
+          <div class="flex items-start gap-3">
+            <img
+              v-if="previewUrl && mediaType === 'image'"
+              :src="previewUrl"
+              class="h-20 w-20 rounded object-cover"
+            />
+            <video
+              v-else-if="previewUrl && mediaType === 'video'"
+              :src="previewUrl"
+              class="h-20 w-20 rounded bg-black object-cover"
+              muted
+            />
+            <div
+              v-else
+              class="flex h-20 w-20 items-center justify-center rounded bg-muted"
+            >
+              <FileText class="h-8 w-8 text-muted-foreground" />
+            </div>
+            <div class="min-w-0 flex-1 text-xs">
+              <p class="truncate font-medium">{{ file.name }}</p>
+              <p class="text-muted-foreground">{{ prettySize(file.size) }}</p>
+              <p class="text-muted-foreground">{{ mediaType }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="uploading" class="space-y-1">
+          <div class="h-1.5 overflow-hidden rounded-full bg-muted">
+            <div
+              class="h-full bg-emerald-500 transition-all"
+              :style="{ width: `${progress}%` }"
+            />
+          </div>
+          <p class="text-xs text-muted-foreground">Enviando arquivo... {{ progress }}%</p>
         </div>
 
         <div class="space-y-1.5">
@@ -91,18 +242,24 @@ async function onSubmit() {
           <Input v-model="caption" placeholder="Texto abaixo da mídia" />
         </div>
 
-        <div class="space-y-1.5">
-          <Label>Nome do arquivo (opcional)</Label>
-          <Input v-model="filename" placeholder="documento.pdf" />
-        </div>
+        <details class="text-xs">
+          <summary class="cursor-pointer text-muted-foreground hover:text-foreground">
+            Ou usar URL pública
+          </summary>
+          <Input
+            v-model="urlFallback"
+            placeholder="https://..."
+            class="mt-2"
+          />
+        </details>
 
         <p v-if="err" class="text-sm text-destructive">{{ err }}</p>
       </div>
 
       <DialogFooter>
-        <Button variant="outline" @click="emit('update:open', false)">Cancelar</Button>
-        <Button :disabled="sending" @click="onSubmit">
-          <Loader2 v-if="sending" class="h-4 w-4 animate-spin" />
+        <Button variant="outline" :disabled="uploading" @click="emit('update:open', false)">Cancelar</Button>
+        <Button :disabled="uploading || (!file && !urlFallback.trim())" @click="uploadAndSubmit">
+          <Loader2 v-if="uploading" class="h-4 w-4 animate-spin" />
           Enviar
         </Button>
       </DialogFooter>

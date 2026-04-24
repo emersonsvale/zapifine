@@ -117,10 +117,10 @@ function stripWhatsappMarkup(s: string) {
 function previewText(c: Conv) {
   const tipo = (c.last_message_tipo ?? '').toLowerCase()
   if (!c.last_message) {
-    if (['image', 'imagem', 'photo', 'picture'].includes(tipo)) return '📷 Imagem'
-    if (['audio', 'voice', 'ptt'].includes(tipo)) return '🎤 Áudio'
-    if (tipo === 'video') return '🎬 Vídeo'
-    if (['document', 'file', 'pdf'].includes(tipo)) return '📎 Documento'
+    if (['image', 'imagem', 'photo', 'picture', 'imagemessage'].includes(tipo)) return '📷 Imagem'
+    if (['audio', 'voice', 'ptt', 'audiomessage'].includes(tipo)) return '🎤 Áudio'
+    if (['video', 'videomessage'].includes(tipo)) return '🎬 Vídeo'
+    if (['document', 'file', 'pdf', 'documentmessage'].includes(tipo)) return '📎 Documento'
     return ''
   }
   return stripWhatsappMarkup(c.last_message)

@@ -322,6 +322,7 @@ export function useChats() {
         .from('whats_mensagens_conversa')
         .update({ reacao: nextReaction || null } as never)
         .eq('id', message.id)
+      trackMessageUsage()
     } catch (err) {
       // rollback
       if (idx !== -1) {
@@ -375,6 +376,7 @@ export function useChats() {
         .update({ mensagem: trimmed, editada: true } as never)
         .eq('id', message.id)
       if (updErr) throw updErr
+      trackMessageUsage()
     } catch (err) {
       if (idx !== -1) {
         const rollback = (messages.value ?? []).slice()
@@ -423,6 +425,7 @@ export function useChats() {
         .update({ deletada: true } as never)
         .eq('id', message.id)
       if (updErr) throw updErr
+      trackMessageUsage()
     } catch (err) {
       if (idx !== -1 && prev) {
         const rollback = (messages.value ?? []).slice()
@@ -591,6 +594,17 @@ export function useChats() {
     ensureLeadAvatar(id)
   }
 
+  function trackMessageUsage() {
+    if (!companyId.value) return
+    // Fire-and-forget: nao bloqueia UX mesmo se falhar.
+    supabase.functions
+      .invoke('acrescentar_uso_mensal', {
+        method: 'POST',
+        body: { companie_id: companyId.value, add_mensagens: 1 },
+      })
+      .catch((err) => console.warn('[useChats] track usage fail', err))
+  }
+
   const avatarInFlight = new Set<number>()
   async function ensureLeadAvatar(conversationId: number) {
     if (!companyId.value) return
@@ -742,6 +756,7 @@ export function useChats() {
         messages.value = next
       }
 
+      trackMessageUsage()
       refreshConversations()
     } catch (err) {
       messages.value = (messages.value ?? []).filter((m) => m.id !== tempId)
@@ -876,6 +891,7 @@ export function useChats() {
         next[idx] = inserted as Message
         messages.value = next
       }
+      trackMessageUsage()
       refreshConversations()
     } catch (err) {
       messages.value = (messages.value ?? []).filter((m) => m.id !== tempId)
@@ -1042,6 +1058,24 @@ export function useChats() {
               if (row.status === 'Recebida' && selectedId.value === id) {
                 markConversationSeen(id)
               }
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'whats_mensagens_conversa',
+              filter: `whats_conversa_id=eq.${id}`,
+            },
+            (payload) => {
+              const row = payload.new as Message
+              const list = messages.value ?? []
+              const idx = list.findIndex((m) => m.id === row.id)
+              if (idx === -1) return
+              const next = list.slice()
+              next[idx] = { ...next[idx], ...row } as Message
+              messages.value = next
             },
           )
           .subscribe((status) => {

@@ -203,14 +203,16 @@ function formatTime(iso: string | null) {
 
 const tipo = computed(() => (props.message.tipo ?? 'text').toLowerCase())
 const isImage = computed(() =>
-  ['image', 'imagem', 'photo', 'picture'].includes(tipo.value),
+  ['image', 'imagem', 'photo', 'picture', 'imagemessage'].includes(tipo.value),
 )
 const isAudio = computed(() =>
-  ['audio', 'voice', 'ptt'].includes(tipo.value),
+  ['audio', 'voice', 'ptt', 'audiomessage'].includes(tipo.value),
 )
-const isVideo = computed(() => tipo.value === 'video')
+const isVideo = computed(() =>
+  ['video', 'videomessage'].includes(tipo.value),
+)
 const isDocument = computed(() =>
-  ['document', 'file', 'pdf'].includes(tipo.value),
+  ['document', 'file', 'pdf', 'documentmessage'].includes(tipo.value),
 )
 
 function escapeHtml(s: string) {
