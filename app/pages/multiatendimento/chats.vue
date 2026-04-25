@@ -23,6 +23,7 @@ import {
   UserPlus,
   Link2,
   X,
+  ArrowRightLeft,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -53,9 +54,16 @@ const {
   msgsHasMore,
   msgsLoadingOlder,
   assignConversation,
+  transferToUser,
+  transferToSetor,
+  companyId,
 } = useChats()
 
 const authUser = useSupabaseUser()
+const { data: currentUser } = useCurrentUser()
+const currentUserSetorId = computed(
+  () => (currentUser.value as { setor_id?: string | null } | null)?.setor_id ?? null,
+)
 
 const isAssignedToMe = computed(
   () => !!selectedConversation.value?.assigned_to &&
@@ -66,6 +74,22 @@ const assignedBadgeLabel = computed(() => {
   if (!c?.assigned_to) return null
   if (c.assigned_to === authUser.value?.id) return 'Você'
   return c.assigned_nome ?? 'outro atendente'
+})
+const setorBadge = computed(() => {
+  const c = selectedConversation.value
+  if (!c?.setor_id) return null
+  return {
+    nome: c.setor_nome ?? 'Setor',
+    cor: c.setor_cor ?? '#94a3b8',
+  }
+})
+const canClaim = computed(() => {
+  const c = selectedConversation.value
+  if (!c) return false
+  if (c.assigned_to) return false
+  // Sem dono: pode assumir se for do meu setor OU não tem setor (livre).
+  if (!c.setor_id) return true
+  return c.setor_id === currentUserSetorId.value
 })
 const assigning = ref(false)
 
@@ -80,6 +104,39 @@ async function onAssignMe() {
     toast.error(err instanceof Error ? err.message : 'Falha ao atribuir.')
   } finally {
     assigning.value = false
+  }
+}
+
+const transferOpen = ref(false)
+const transferMode = ref<'user' | 'setor'>('user')
+
+function openTransfer(initial: 'user' | 'setor' = 'user') {
+  if (!selectedConversation.value) return
+  transferMode.value = initial
+  transferOpen.value = true
+}
+
+async function onTransferUser(payload: { userId: string; nota: string | null }) {
+  const c = selectedConversation.value
+  if (!c) return
+  try {
+    await transferToUser(c.id, payload.userId, payload.nota)
+    toast.success('Conversa transferida.')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao transferir.')
+    throw err
+  }
+}
+
+async function onTransferSetor(payload: { setorId: string; nota: string | null }) {
+  const c = selectedConversation.value
+  if (!c) return
+  try {
+    const res = await transferToSetor(c.id, payload.setorId, payload.nota)
+    toast.success(`Conversa enviada ao setor (${res.notified_count} notificado${res.notified_count === 1 ? '' : 's'}).`)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao transferir.')
+    throw err
   }
 }
 
@@ -458,6 +515,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         :selected-id="selectedId"
         :pending="convPending"
         :current-user-id="authUser?.id ?? null"
+        :current-user-setor-id="currentUserSetorId"
         @select="selectConversation"
       />
     </div>
@@ -503,6 +561,17 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               >
                 {{ isAssignedToMe ? 'Minha' : assignedBadgeLabel }}
               </span>
+              <span
+                v-if="setorBadge"
+                class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"
+                :style="{
+                  backgroundColor: setorBadge.cor + '20',
+                  color: setorBadge.cor,
+                }"
+                :title="`Setor: ${setorBadge.nome}`"
+              >
+                {{ setorBadge.nome }}
+              </span>
             </p>
             <p
               v-if="presenceLabel"
@@ -514,6 +583,19 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               {{ headerNumber }}
             </p>
           </div>
+          <Button
+            v-if="canClaim"
+            variant="default"
+            size="sm"
+            class="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+            :disabled="assigning"
+            title="Assumir esta conversa"
+            @click="onAssignMe"
+          >
+            <Loader2 v-if="assigning" class="h-4 w-4 animate-spin" />
+            <UserPlus v-else class="h-4 w-4" />
+            Assumir
+          </Button>
           <Button
             :variant="iaAtiva ? 'default' : 'outline'"
             size="sm"
@@ -554,6 +636,14 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               >
                 <UserIcon class="h-4 w-4" />
                 Liberar conversa
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="openTransfer('user')">
+                <ArrowRightLeft class="h-4 w-4" />
+                Transferir → atendente
+              </DropdownMenuItem>
+              <DropdownMenuItem @select="openTransfer('setor')">
+                <ArrowRightLeft class="h-4 w-4" />
+                Transferir → setor
               </DropdownMenuItem>
               <DropdownMenuSeparator v-if="selectedConversation?.assigned_to || !isAssignedToMe" />
               <template v-if="hasLead">
@@ -751,15 +841,10 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               :class="inputMode === 'note' ? 'border-amber-400' : ''"
               @keydown="handleKeydown"
             />
-            <Button
-              v-if="!input.trim()"
-              variant="ghost"
-              size="icon"
-              title="Áudio (em breve)"
-              disabled
-            >
-              <Mic class="h-4 w-4" />
-            </Button>
+            <ChatsAudioRecorder
+              v-if="!input.trim() && inputMode === 'message'"
+              @sent="errorMsg = ''"
+            />
             <Button
               v-else
               size="icon"
@@ -813,6 +898,15 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       :default-number="selectedConversation?.leads?.numero_whatsapp_lead ?? selectedConversation?.remoteJid ?? null"
       :default-name="selectedConversation?.leads?.nome_lead ?? null"
       @linked="refreshConversations"
+    />
+
+    <ChatsTransferDialog
+      v-model:open="transferOpen"
+      :company-id="companyId"
+      :exclude-user-id="authUser?.id ?? null"
+      :initial-mode="transferMode"
+      @submit-user="onTransferUser"
+      @submit-setor="onTransferSetor"
     />
   </div>
 </template>

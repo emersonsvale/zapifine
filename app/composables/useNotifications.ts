@@ -6,6 +6,8 @@ export function useNotifications() {
   const supabase = useSupabaseClient<Database>()
   const authUser = useSupabaseUser()
   const { data: currentUser } = useCurrentUser()
+  const { toast } = useAlerts()
+  const router = useRouter()
 
   const companyId = computed(() => currentUser.value?.companie_id ?? null)
 
@@ -68,5 +70,92 @@ export function useNotifications() {
     }
   }
 
-  return { notifications, refresh, pending, unreadCount, markAsRead, markAllAsRead }
+  function openNotificationTarget(n: Notification) {
+    const ref = (n as unknown as { reference_type?: string | null }).reference_type
+    if (!ref) return false
+    if (ref.startsWith('conversa:')) {
+      const convId = ref.split(':')[1]
+      if (convId) {
+        router.push({ path: '/multiatendimento/chats', query: { conv: convId } })
+        return true
+      }
+    }
+    return false
+  }
+
+  // Realtime: insert + update
+  let channel: ReturnType<typeof supabase.channel> | null = null
+
+  if (import.meta.client) {
+    watch(
+      [authUser, companyId],
+      async ([u, cid]) => {
+        if (channel) {
+          await supabase.removeChannel(channel)
+          channel = null
+        }
+        if (!u?.id) return
+        const uid = u.id
+        channel = supabase
+          .channel(`notif-${uid}-${Math.random().toString(36).slice(2, 8)}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'notifications',
+              filter: `user_id=eq.${uid}`,
+            },
+            (payload) => {
+              const row = payload.new as Notification
+              const list = notifications.value ?? []
+              if (list.find((n) => n.id === row.id)) return
+              notifications.value = [row, ...list].slice(0, 30)
+              const tipo = (row as unknown as { tipo?: string | null }).tipo
+              if (tipo === 'transferencia') {
+                toast.info(row.title || 'Conversa transferida pra você.', {
+                  description: row.message ?? undefined,
+                })
+              } else if (row.title) {
+                toast.info(row.title, { description: row.message ?? undefined })
+              }
+            },
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'notifications',
+              filter: `user_id=eq.${uid}`,
+            },
+            (payload) => {
+              const row = payload.new as Notification
+              const list = notifications.value ?? []
+              const idx = list.findIndex((n) => n.id === row.id)
+              if (idx === -1) return
+              const next = list.slice()
+              next[idx] = row
+              notifications.value = next
+            },
+          )
+          .subscribe()
+      },
+      { immediate: true },
+    )
+
+    onBeforeUnmount(async () => {
+      if (channel) await supabase.removeChannel(channel)
+    })
+  }
+
+  return {
+    notifications,
+    refresh,
+    pending,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    openNotificationTarget,
+  }
 }

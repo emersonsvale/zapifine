@@ -27,6 +27,9 @@ type Conversation = {
   grupoNome: string | null
   assigned_to: string | null
   assigned_nome: string | null
+  setor_id: string | null
+  setor_nome: string | null
+  setor_cor: string | null
 }
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
@@ -111,6 +114,9 @@ export function useChats() {
         unread_count: number
         assigned_to: string | null
         assigned_nome: string | null
+        setor_id: string | null
+        setor_nome: string | null
+        setor_cor: string | null
       }>
 
       const ids = rows.map((r) => r.id)
@@ -154,6 +160,9 @@ export function useChats() {
         grupoNome: groupMap.get(r.id)?.grupoNome ?? null,
         assigned_to: r.assigned_to ?? null,
         assigned_nome: r.assigned_nome ?? null,
+        setor_id: r.setor_id ?? null,
+        setor_nome: r.setor_nome ?? null,
+        setor_cor: r.setor_cor ?? null,
       }))
     },
     { watch: [() => authUser.value?.id], default: () => [] },
@@ -498,6 +507,53 @@ export function useChats() {
       throw error
     }
     await refreshConversations()
+  }
+
+  async function transferToUser(
+    conversationId: number,
+    toUserId: string,
+    nota?: string | null,
+  ) {
+    const { data, error } = await supabase.rpc(
+      'transferir_conversa_user' as never,
+      {
+        p_conversa_id: conversationId,
+        p_to_user_id: toUserId,
+        p_nota: nota ?? null,
+      } as never,
+    )
+    if (error) throw error
+    await refreshConversations()
+    return data as unknown as {
+      ok: boolean
+      conversa_id: number
+      assigned_to: string
+      setor_id: string | null
+      notification_id: string
+    }
+  }
+
+  async function transferToSetor(
+    conversationId: number,
+    setorId: string,
+    nota?: string | null,
+  ) {
+    const { data, error } = await supabase.rpc(
+      'transferir_conversa_setor' as never,
+      {
+        p_conversa_id: conversationId,
+        p_setor_id: setorId,
+        p_nota: nota ?? null,
+      } as never,
+    )
+    if (error) throw error
+    await refreshConversations()
+    return data as unknown as {
+      ok: boolean
+      conversa_id: number
+      setor_id: string
+      notified_count: number
+    }
   }
 
   async function linkLead(conversationId: number, leadId: number) {
@@ -980,7 +1036,12 @@ export function useChats() {
       refreshConversations()
       return
     }
-    // Sem mudança relevante pro header — mantém.
+    const nextAssigned = (row.assigned_to as string | null | undefined) ?? null
+    const nextSetor = (row.setor_id as string | null | undefined) ?? null
+    if (nextAssigned !== prev.assigned_to || nextSetor !== prev.setor_id) {
+      // Atribuição/setor mudou — refetch pra trazer assigned_nome / setor_nome / setor_cor.
+      refreshConversations()
+    }
   }
 
   // Realtime subscriptions
@@ -1209,6 +1270,8 @@ export function useChats() {
     editMessage,
     deleteMessage,
     assignConversation,
+    transferToUser,
+    transferToSetor,
     sendNote,
     linkLead,
     refreshConversations,

@@ -11,6 +11,7 @@ import {
   Ban,
   Reply,
   StickyNote,
+  ArrowRightLeft,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -146,7 +147,12 @@ async function doDelete() {
   }
 }
 
-const isNote = computed(() => props.message.interna === true)
+const isNote = computed(
+  () => props.message.interna === true && (props.message.tipo ?? '').toLowerCase() !== 'evento',
+)
+const isEvento = computed(
+  () => (props.message.tipo ?? '').toLowerCase() === 'evento',
+)
 
 const SENT_STATUSES = ['Enviada', 'Entregue', 'Lida'] as const
 const isSent = computed(() =>
@@ -238,7 +244,19 @@ const formattedMessage = computed(() =>
 
 <template>
   <div
-    v-if="isNote"
+    v-if="isEvento"
+    class="flex w-full justify-center py-1"
+  >
+    <div
+      class="flex items-center gap-1.5 rounded-full bg-muted/60 px-3 py-1 text-[11px] text-muted-foreground"
+    >
+      <ArrowRightLeft class="h-3 w-3" />
+      <span>{{ message.mensagem }}</span>
+      <span class="opacity-60">· {{ formatTime(message.created_at) }}</span>
+    </div>
+  </div>
+  <div
+    v-else-if="isNote"
     class="flex w-full justify-center"
   >
     <div

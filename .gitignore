@@ -25,3 +25,6 @@ dist
 
 # n8n workflows (contêm credenciais de dev)
 n8n-workflows/
+
+# Pasta local com arquivos sensíveis (OAuth client secrets, anotações)
+.arquivos/
