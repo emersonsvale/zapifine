@@ -2,35 +2,69 @@ import type { Database } from '~~/types/database'
 
 type Agendamento = Database['public']['Tables']['agendamentos']['Row']
 type Lead = Database['public']['Tables']['leads']['Row']
-type StatusAgenda = Database['public']['Enums']['enum_status_agenda']
 
 export type AgendamentoWithLead = Agendamento & { lead: Lead | null }
 
-export type NovoAgendamentoInput = {
-  title: string
-  start: string
-  end: string
-  guest_email?: string | null
+export type AttendeeInput = {
+  email: string
+  display_name?: string | null
   lead_id?: number | null
 }
 
-async function fnError(err: unknown): Promise<string> {
-  const e = err as { message?: string; context?: Response }
-  let detail = e?.message ?? 'Erro desconhecido'
-  try {
-    if (e?.context && typeof e.context.text === 'function') {
-      const body = await e.context.text()
-      if (body) {
-        try {
-          const parsed = JSON.parse(body)
-          detail = parsed.error ?? parsed.message ?? body
-        } catch {
-          detail = body
-        }
-      }
-    }
-  } catch {}
-  return detail
+export type NovoAgendamentoInput = {
+  title: string
+  start: string // ISO 8601 com timezone
+  end: string   // ISO 8601 com timezone
+  timezone?: string
+  description?: string | null
+  location?: string | null
+  with_meet?: boolean
+  attendees?: AttendeeInput[]
+  lead_id?: number | null
+  user_id?: string | null
+  force_outside_availability?: boolean
+  send_updates?: 'all' | 'externalOnly' | 'none'
+}
+
+export type CreateEventError = Error & {
+  code?: string
+  reason?: string | null
+}
+
+function asCreateError(err: unknown): CreateEventError {
+  const e = err as {
+    statusCode?: number
+    statusMessage?: string
+    data?: { statusMessage?: string; message?: string; code?: string; reason?: string }
+    message?: string
+  }
+  const message =
+    e?.data?.statusMessage
+    ?? e?.statusMessage
+    ?? e?.data?.message
+    ?? e?.message
+    ?? 'Erro desconhecido'
+  const out = new Error(message) as CreateEventError
+  out.code = e?.data?.code
+  out.reason = e?.data?.reason ?? null
+  return out
+}
+
+export type EditarAgendamentoInput = Partial<NovoAgendamentoInput>
+
+function asMessage(err: unknown): string {
+  const e = err as {
+    statusMessage?: string
+    data?: { statusMessage?: string; message?: string }
+    message?: string
+  }
+  return (
+    e?.data?.statusMessage
+    ?? e?.statusMessage
+    ?? e?.data?.message
+    ?? e?.message
+    ?? 'Erro desconhecido'
+  )
 }
 
 export function useAgendamentos() {
@@ -47,8 +81,12 @@ export function useAgendamentos() {
 
   const googleConnectUrl = computed(() => {
     if (!userId.value) return null
-    return `https://n8n.valeapps.com.br/webhook/oauth-start?user_id=${userId.value}`
+    return '/api/google/oauth/start'
   })
+
+  async function disconnectGoogle() {
+    await $fetch('/api/google/oauth/disconnect', { method: 'POST' })
+  }
 
   const { data, refresh, pending } = useAsyncData<AgendamentoWithLead[]>(
     'agendamentos',
@@ -65,67 +103,72 @@ export function useAgendamentos() {
     { watch: [companyId], default: () => [] },
   )
 
-  async function invoke<T>(slug: string, body: Record<string, unknown>) {
-    const { data, error } = await supabase.functions.invoke<T>(slug, {
-      method: 'POST',
-      body,
-    })
-    if (error) {
-      const detail = await fnError(error)
-      throw new Error(detail)
-    }
-    return data as T
-  }
-
   async function createEvent(input: NovoAgendamentoInput) {
-    if (!companyId.value) throw new Error('Empresa não carregada.')
-    const res = await invoke<{ eventId: string; link?: string }>(
-      'Create-Google-Event',
-      {
-        companie_id: companyId.value,
-        title: input.title,
-        start: input.start,
-        end: input.end,
-        guest_email: input.guest_email ?? null,
-        lead_id: input.lead_id ?? null,
-      },
-    )
-    await refresh()
-    return res
+    try {
+      const res = await $fetch<{ ok: true; id: string; link: string | null; meetLink: string | null }>(
+        '/api/agendamentos',
+        { method: 'POST', body: input },
+      )
+      await refresh()
+      return res
+    } catch (err) {
+      throw asCreateError(err)
+    }
   }
 
-  async function createLembretes(agendamentoId: string) {
-    return invoke<unknown>('create_lembretes_from_agendamento', {
-      agendamentos_id: agendamentoId,
-    })
+  async function updateEvent(id: string, input: EditarAgendamentoInput) {
+    try {
+      const res = await $fetch<{ ok: true; id: string }>(
+        `/api/agendamentos/${encodeURIComponent(id)}`,
+        { method: 'PATCH', body: input },
+      )
+      await refresh()
+      return res
+    } catch (err) {
+      throw new Error(asMessage(err))
+    }
   }
 
   async function confirmEvent(agendamentoId: string) {
-    const { error } = await supabase
-      .from('agendamentos')
-      .update({ status_agenda: 'Confirmado' satisfies StatusAgenda })
-      .eq('id', agendamentoId)
-    if (error) throw error
     try {
-      await createLembretes(agendamentoId)
+      const res = await $fetch<{ ok: true; id: string; lembretes_enqueued: number }>(
+        `/api/agendamentos/${encodeURIComponent(agendamentoId)}/confirm`,
+        { method: 'POST' },
+      )
+      await refresh()
+      return res
     } catch (err) {
-      console.warn('[agendamentos] lembretes:', err)
+      throw new Error(asMessage(err))
     }
-    await refresh()
   }
 
   async function cancelEvent(agendamentoId: string) {
-    if (!companyId.value) throw new Error('Empresa não carregada.')
-    await invoke<unknown>('delete_google_event', {
-      companie_id: companyId.value,
-      event_id: agendamentoId,
-    })
-    await supabase
-      .from('agendamentos')
-      .update({ status_agenda: 'Cancelado' satisfies StatusAgenda })
-      .eq('id', agendamentoId)
-      .eq('companie_id', companyId.value)
-    await refresh()
+    try {
+      const res = await $fetch<{ ok: true; id: string }>(
+        `/api/agendamentos/${encodeURIComponent(agendamentoId)}`,
+        { method: 'DELETE' },
+      )
+      await refresh()
+      return res
+    } catch (err) {
+      throw new Error(asMessage(err))
+    }
+  }
+
+  async function syncFromGoogle() {
+    try {
+      const res = await $fetch<{
+        fetched: number
+        upserted: number
+        cancelled: number
+        full_resync: boolean
+        next_sync_token: string | null
+      }>('/api/google/sync', { method: 'POST' })
+      await refresh()
+      return res
+    } catch (err) {
+      throw new Error(asMessage(err))
+    }
   }
 
   return {
@@ -136,9 +179,11 @@ export function useAgendamentos() {
     userId,
     isGoogleConnected,
     googleConnectUrl,
+    disconnectGoogle,
     createEvent,
+    updateEvent,
     confirmEvent,
     cancelEvent,
-    createLembretes,
+    syncFromGoogle,
   }
 }

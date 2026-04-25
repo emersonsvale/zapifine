@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Calendar, Trash2, CheckCircle2, ExternalLink } from 'lucide-vue-next'
+import { Calendar, Trash2, CheckCircle2, ExternalLink, Pencil } from 'lucide-vue-next'
 import type { AgendamentoWithLead } from '~/composables/useAgendamentos'
 
 defineProps<{
@@ -10,6 +10,7 @@ defineProps<{
 const emit = defineEmits<{
   (e: 'confirm', ag: AgendamentoWithLead): void
   (e: 'cancel', ag: AgendamentoWithLead): void
+  (e: 'edit', ag: AgendamentoWithLead): void
 }>()
 
 function fmtDateTime(iso: string | null) {
@@ -35,7 +36,7 @@ function statusClass(s: string | null | undefined) {
 <template>
   <Card class="overflow-hidden p-0">
     <div
-      class="grid grid-cols-[1.1fr_1.1fr_2fr_1fr_110px] gap-3 border-b bg-muted/20 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+      class="grid grid-cols-[1.1fr_1.1fr_2fr_1fr_160px] gap-3 border-b bg-muted/20 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
     >
       <span>Data/Hora Início</span>
       <span>Data/Hora Fim</span>
@@ -65,7 +66,7 @@ function statusClass(s: string | null | undefined) {
       <li
         v-for="ag in agendamentos"
         :key="ag.id"
-        class="grid grid-cols-[1.1fr_1.1fr_2fr_1fr_110px] items-center gap-3 px-5 py-3 text-sm"
+        class="grid grid-cols-[1.1fr_1.1fr_2fr_1fr_160px] items-center gap-3 px-5 py-3 text-sm"
       >
         <span class="flex items-center gap-2">
           <Calendar class="h-4 w-4 text-muted-foreground" />
@@ -95,6 +96,15 @@ function statusClass(s: string | null | undefined) {
             <a :href="ag.gg_link" target="_blank" rel="noopener">
               <ExternalLink class="h-4 w-4" />
             </a>
+          </Button>
+          <Button
+            v-if="ag.status_agenda !== 'Cancelado'"
+            variant="ghost"
+            size="icon"
+            title="Editar"
+            @click="emit('edit', ag)"
+          >
+            <Pencil class="h-4 w-4" />
           </Button>
           <Button
             v-if="

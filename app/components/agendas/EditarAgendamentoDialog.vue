@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { reactive, ref, watch, computed } from 'vue'
 import { Loader2, X, Plus } from 'lucide-vue-next'
-import type { AttendeeInput, CreateEventError } from '~/composables/useAgendamentos'
+import type { Database } from '~~/types/database'
+import type { AttendeeInput, AgendamentoWithLead } from '~/composables/useAgendamentos'
+
+const props = defineProps<{
+  agendamento: AgendamentoWithLead | null
+}>()
 
 const open = defineModel<boolean>('open', { default: false })
 
 const { leads } = useLeads()
-const { createEvent } = useAgendamentos()
-const { confirm: confirmDialog } = useAlerts()
+const { updateEvent } = useAgendamentos()
 
 const form = reactive({
   title: '',
@@ -15,8 +19,8 @@ const form = reactive({
   location: '',
   startDate: '',
   startTime: '',
-  durationHours: '1',
-  with_meet: false,
+  endDate: '',
+  endTime: '',
   lead_id: '' as string,
 })
 
@@ -29,34 +33,44 @@ const errorMsg = ref('')
 
 const tz = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Sao_Paulo')
 
-watch(open, (v) => {
-  if (!v) return
-  form.title = ''
-  form.description = ''
-  form.location = ''
-  form.startDate = ''
-  form.startTime = ''
-  form.durationHours = '1'
-  form.with_meet = false
-  form.lead_id = ''
-  attendees.value = []
+function pad(n: number) { return String(n).padStart(2, '0') }
+function splitIso(iso: string | null): { date: string; time: string } {
+  if (!iso) return { date: '', time: '' }
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return { date: '', time: '' }
+  return {
+    date: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
+    time: `${pad(d.getHours())}:${pad(d.getMinutes())}`,
+  }
+}
+
+watch([open, () => props.agendamento], async ([isOpen, ag]) => {
+  if (!isOpen || !ag) return
+  form.title = ag.gg_title ?? ''
+  form.description = ag.description ?? ''
+  form.location = ag.location ?? ''
+  const s = splitIso(ag.gg_start)
+  const e = splitIso(ag.gg_end)
+  form.startDate = s.date
+  form.startTime = s.time
+  form.endDate = e.date
+  form.endTime = e.time
+  form.lead_id = ag.lead_id ? String(ag.lead_id) : ''
+  errorMsg.value = ''
   newEmail.value = ''
   newName.value = ''
-  errorMsg.value = ''
-})
 
-watch(() => form.lead_id, (val) => {
-  if (!val) return
-  const lead = leads.value?.find((l) => String(l.id) === val)
-  if (!lead) return
-  const email = lead['e-mail']?.trim()
-  if (!email) return
-  if (attendees.value.some((a) => a.email.toLowerCase() === email.toLowerCase())) return
-  attendees.value.push({
-    email,
-    display_name: lead.nome_lead ?? null,
-    lead_id: lead.id,
-  })
+  // Carrega attendees do banco
+  const supa = useSupabaseClient<Database>()
+  const { data } = await supa
+    .from('agendamento_attendees')
+    .select('email, display_name, lead_id')
+    .eq('agendamento_id', ag.id)
+  attendees.value = (data ?? []).map((a) => ({
+    email: a.email,
+    display_name: a.display_name ?? null,
+    lead_id: a.lead_id ?? null,
+  }))
 })
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -82,87 +96,68 @@ function removeAttendee(idx: number) {
   attendees.value.splice(idx, 1)
 }
 
+watch(() => form.lead_id, (val) => {
+  if (!val) return
+  const lead = leads.value?.find((l) => String(l.id) === val)
+  if (!lead) return
+  const email = lead['e-mail']?.trim()
+  if (!email) return
+  if (attendees.value.some((a) => a.email.toLowerCase() === email.toLowerCase())) return
+  attendees.value.push({
+    email,
+    display_name: lead.nome_lead ?? null,
+    lead_id: lead.id,
+  })
+})
+
 function buildIso(dateStr: string, timeStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
   const [hh, mm] = timeStr.split(':').map(Number)
   const dt = new Date(y!, m! - 1, d!, hh!, mm!, 0)
-  // Local time → ISO with offset
   const off = -dt.getTimezoneOffset()
   const sign = off >= 0 ? '+' : '-'
   const abs = Math.abs(off)
   const oh = String(Math.floor(abs / 60)).padStart(2, '0')
   const om = String(abs % 60).padStart(2, '0')
-  const pad = (n: number) => String(n).padStart(2, '0')
   return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}:00${sign}${oh}:${om}`
 }
 
 async function submit() {
+  if (!props.agendamento) return
   errorMsg.value = ''
   if (!form.title.trim()) {
     errorMsg.value = 'Informe o título.'
     return
   }
-  if (!form.startDate || !form.startTime) {
-    errorMsg.value = 'Informe data e hora de início.'
+  if (!form.startDate || !form.startTime || !form.endDate || !form.endTime) {
+    errorMsg.value = 'Informe data e hora de início e fim.'
     return
   }
-  const hours = Number(form.durationHours)
-  if (!hours || hours <= 0) {
-    errorMsg.value = 'Duração inválida.'
-    return
-  }
-
   const startIso = buildIso(form.startDate, form.startTime)
-  const startMs = new Date(startIso).getTime()
-  if (startMs <= Date.now()) {
-    errorMsg.value = 'A data/hora de início precisa ser futura.'
+  const endIso = buildIso(form.endDate, form.endTime)
+  if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+    errorMsg.value = 'Fim deve ser posterior ao início.'
     return
   }
-  const endIso = new Date(startMs + hours * 60 * 60 * 1000).toISOString()
 
   saving.value = true
   try {
-    await tryCreate(false)
-    open.value = false
-  } catch (err) {
-    const e = err as CreateEventError
-    if (e.code === 'OUTSIDE_AVAILABILITY') {
-      const ok = await confirmDialog({
-        title: 'Fora da disponibilidade',
-        description: `${e.reason ?? e.message}\n\nDeseja criar mesmo assim?`,
-        confirmLabel: 'Criar mesmo assim',
-        variant: 'danger',
-      })
-      if (ok) {
-        try {
-          await tryCreate(true)
-          open.value = false
-        } catch (err2) {
-          errorMsg.value = err2 instanceof Error ? err2.message : 'Falha ao criar.'
-        } finally {
-          saving.value = false
-        }
-        return
-      }
-    }
-    errorMsg.value = e instanceof Error ? e.message : 'Falha ao criar agendamento.'
-  } finally {
-    saving.value = false
-  }
-
-  async function tryCreate(force: boolean) {
-    await createEvent({
+    await updateEvent(props.agendamento.id, {
       title: form.title.trim(),
       description: form.description.trim() || null,
       location: form.location.trim() || null,
       start: startIso,
       end: endIso,
       timezone: tz.value,
-      with_meet: form.with_meet,
       attendees: attendees.value,
       lead_id: form.lead_id ? Number(form.lead_id) : null,
-      force_outside_availability: force,
     })
+    open.value = false
+  } catch (err) {
+    errorMsg.value =
+      err instanceof Error ? err.message : 'Falha ao atualizar agendamento.'
+  } finally {
+    saving.value = false
   }
 }
 </script>
@@ -171,85 +166,54 @@ async function submit() {
   <Dialog v-model:open="open">
     <DialogContent class="sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle>Novo agendamento</DialogTitle>
+        <DialogTitle>Editar agendamento</DialogTitle>
         <DialogDescription>
-          Cria um evento no Google Calendar da empresa e notifica os convidados.
+          As alterações são sincronizadas com o Google Calendar e os convidados são notificados.
         </DialogDescription>
       </DialogHeader>
 
       <form class="space-y-4" @submit.prevent="submit">
         <div class="space-y-1.5">
-          <Label for="ag-title">Título <span class="text-destructive">*</span></Label>
-          <Input
-            id="ag-title"
-            v-model="form.title"
-            placeholder="Reunião com cliente"
-          />
+          <Label for="ed-title">Título <span class="text-destructive">*</span></Label>
+          <Input id="ed-title" v-model="form.title" />
         </div>
 
-        <div class="grid gap-4 md:grid-cols-[2fr_1fr_1fr]">
+        <div class="grid gap-4 md:grid-cols-2">
           <div class="space-y-1.5">
-            <Label for="ag-date">Data de início <span class="text-destructive">*</span></Label>
-            <Input id="ag-date" v-model="form.startDate" type="date" />
+            <Label>Início <span class="text-destructive">*</span></Label>
+            <div class="flex gap-2">
+              <Input v-model="form.startDate" type="date" class="flex-1" />
+              <Input v-model="form.startTime" type="time" class="w-32" />
+            </div>
           </div>
           <div class="space-y-1.5">
-            <Label for="ag-time">Hora <span class="text-destructive">*</span></Label>
-            <Input id="ag-time" v-model="form.startTime" type="time" />
-          </div>
-          <div class="space-y-1.5">
-            <Label for="ag-dur">Duração (h) <span class="text-destructive">*</span></Label>
-            <Select v-model="form.durationHours">
-              <SelectTrigger id="ag-dur">
-                <SelectValue placeholder="1" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0.5">30 min</SelectItem>
-                <SelectItem value="1">1 hora</SelectItem>
-                <SelectItem value="1.5">1h30</SelectItem>
-                <SelectItem value="2">2 horas</SelectItem>
-                <SelectItem value="3">3 horas</SelectItem>
-                <SelectItem value="4">4 horas</SelectItem>
-              </SelectContent>
-            </Select>
+            <Label>Fim <span class="text-destructive">*</span></Label>
+            <div class="flex gap-2">
+              <Input v-model="form.endDate" type="date" class="flex-1" />
+              <Input v-model="form.endTime" type="time" class="w-32" />
+            </div>
           </div>
         </div>
 
         <div class="space-y-1.5">
-          <Label for="ag-location">Local</Label>
-          <Input
-            id="ag-location"
-            v-model="form.location"
-            placeholder="Endereço, sala ou link"
-          />
+          <Label for="ed-location">Local</Label>
+          <Input id="ed-location" v-model="form.location" />
         </div>
 
         <div class="space-y-1.5">
-          <Label for="ag-desc">Descrição</Label>
+          <Label for="ed-desc">Descrição</Label>
           <textarea
-            id="ag-desc"
+            id="ed-desc"
             v-model="form.description"
             rows="3"
-            placeholder="Notas, pauta, instruções"
             class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 
-        <div class="flex items-center gap-2 rounded-md border bg-muted/20 px-3 py-2">
-          <input
-            id="ag-meet"
-            v-model="form.with_meet"
-            type="checkbox"
-            class="h-4 w-4 accent-primary"
-          />
-          <label for="ag-meet" class="text-sm cursor-pointer">
-            Criar link do Google Meet automaticamente
-          </label>
-        </div>
-
         <div class="space-y-1.5">
-          <Label for="ag-lead">Vincular a um lead</Label>
+          <Label for="ed-lead">Lead vinculado</Label>
           <Select v-model="form.lead_id">
-            <SelectTrigger id="ag-lead">
+            <SelectTrigger id="ed-lead">
               <SelectValue placeholder="Selecione (opcional)" />
             </SelectTrigger>
             <SelectContent>
@@ -259,13 +223,9 @@ async function submit() {
                 :value="String(l.id)"
               >
                 {{ l.nome_lead ?? `Lead #${l.id}` }}
-                <span v-if="l['e-mail']" class="text-muted-foreground"> · {{ l['e-mail'] }}</span>
               </SelectItem>
             </SelectContent>
           </Select>
-          <p class="text-xs text-muted-foreground">
-            Se o lead tiver e-mail, ele é adicionado automaticamente como convidado.
-          </p>
         </div>
 
         <div class="space-y-2">
@@ -319,7 +279,7 @@ async function submit() {
           </Button>
           <Button type="submit" :disabled="saving">
             <Loader2 v-if="saving" class="h-4 w-4 animate-spin" />
-            Salvar
+            Salvar alterações
           </Button>
         </DialogFooter>
       </form>

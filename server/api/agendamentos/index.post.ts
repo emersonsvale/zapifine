@@ -1,0 +1,132 @@
+import {
+  DEFAULT_TZ,
+  normalizeAttendees,
+  parseDateTimeInput,
+  requireMembership,
+} from '~~/server/utils/agendamentos-helpers'
+import { checkUserAvailability } from '~~/server/utils/availability-check'
+import { getCompanyAccessToken } from '~~/server/utils/google-token'
+import { insertEvent } from '~~/server/utils/google-calendar'
+import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
+
+type Body = {
+  title?: string
+  description?: string | null
+  location?: string | null
+  start?: string
+  end?: string
+  timezone?: string | null
+  with_meet?: boolean
+  attendees?: unknown
+  lead_id?: number | null
+  user_id?: string | null // atendente responsável (default = criador)
+  force_outside_availability?: boolean
+  send_updates?: 'all' | 'externalOnly' | 'none'
+}
+
+export default defineEventHandler(async (event) => {
+  const me = await requireMembership(event)
+  const body = await readBody<Body>(event)
+
+  const title = body.title?.trim()
+  if (!title) {
+    throw createError({ statusCode: 400, statusMessage: 'title obrigatório.' })
+  }
+
+  const startIso = parseDateTimeInput(body.start ?? '', 'start')
+  const endIso = parseDateTimeInput(body.end ?? '', 'end')
+  if (new Date(endIso).getTime() <= new Date(startIso).getTime()) {
+    throw createError({ statusCode: 400, statusMessage: 'end deve ser posterior a start.' })
+  }
+
+  const tz = body.timezone?.trim() || DEFAULT_TZ
+  const attendees = normalizeAttendees(body.attendees)
+  const leadId = typeof body.lead_id === 'number' ? body.lead_id : null
+  const targetUserId = body.user_id ?? me.userId
+
+  if (!body.force_outside_availability) {
+    const availability = await checkUserAvailability({
+      userId: targetUserId,
+      companieId: me.companieId,
+      startIso,
+      endIso,
+    })
+    if (!availability.available) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: availability.reason ?? 'Horário fora da disponibilidade do atendente.',
+        data: { code: 'OUTSIDE_AVAILABILITY', reason: availability.reason },
+      })
+    }
+  }
+
+  const { accessToken, calendarId } = await getCompanyAccessToken(me.companieId)
+
+  const created = await insertEvent(accessToken, calendarId, {
+    summary: title,
+    description: body.description?.trim() || undefined,
+    location: body.location?.trim() || undefined,
+    start: { dateTime: startIso, timeZone: tz },
+    end: { dateTime: endIso, timeZone: tz },
+    attendees: attendees.map((a) => ({
+      email: a.email,
+      displayName: a.display_name ?? undefined,
+    })),
+    extendedProperties: {
+      private: {
+        zapifine_user_id: targetUserId,
+        zapifine_companie_id: me.companieId,
+        ...(leadId ? { zapifine_lead_id: String(leadId) } : {}),
+      },
+    },
+    withMeet: body.with_meet ?? false,
+    sendUpdates: body.send_updates ?? (attendees.length ? 'all' : 'none'),
+  })
+
+  const meetLink = created.hangoutLink ?? null
+  const admin = useSupabaseAdmin()
+
+  const { error: insErr } = await admin.from('agendamentos').insert({
+    id: created.id,
+    companie_id: me.companieId,
+    user_id: targetUserId,
+    lead_id: leadId,
+    gg_title: created.summary ?? title,
+    gg_start: created.start?.dateTime ?? startIso,
+    gg_end: created.end?.dateTime ?? endIso,
+    gg_link: created.htmlLink ?? null,
+    description: created.description ?? body.description?.trim() ?? null,
+    location: created.location ?? body.location?.trim() ?? null,
+    meet_link: meetLink,
+    status_agenda: 'Pendente',
+  })
+
+  if (insErr) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: `Evento criado no Google, mas falhou ao salvar no banco: ${insErr.message}`,
+    })
+  }
+
+  if (attendees.length) {
+    const rows = attendees.map((a) => ({
+      agendamento_id: created.id,
+      lead_id: a.lead_id ?? null,
+      email: a.email,
+      display_name: a.display_name ?? null,
+    }))
+    const { error: attErr } = await admin
+      .from('agendamento_attendees')
+      .insert(rows)
+    if (attErr) {
+      console.warn('[agendamentos] attendees insert:', attErr.message)
+    }
+  }
+
+  return {
+    ok: true,
+    id: created.id,
+    link: created.htmlLink ?? null,
+    meetLink,
+  }
+})
