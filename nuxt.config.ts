@@ -40,6 +40,15 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     metaAppSecret: process.env.META_APP_SECRET ?? '',
+    googleClientId: process.env.GOOGLE_CLIENT_ID ?? '',
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    googleRedirectUri:
+      process.env.GOOGLE_REDIRECT_URI
+      ?? 'http://localhost:3000/api/google/oauth/callback',
+    googleOauthStateSecret: process.env.GOOGLE_OAUTH_STATE_SECRET ?? '',
+    evoApiUrl: process.env.EVO_API_URL ?? '',
+    evoGlobalApiKey: process.env.EVO_GLOBAL_API_KEY ?? '',
+    cronSecret: process.env.CRON_SECRET ?? '',
     public: {
       metaAppId: process.env.META_APP_ID ?? '',
       metaConfigId: process.env.META_CONFIG_ID ?? '',
@@ -54,7 +63,7 @@ export default defineNuxtConfig({
     redirectOptions: {
       login: '/login',
       callback: '/confirm',
-      exclude: ['/register', '/forgot-password', '/reset-password', '/confirm'],
+      exclude: ['/register', '/forgot-password', '/reset-password', '/confirm', '/agendamento/*'],
     },
     clientOptions: {
       global: {

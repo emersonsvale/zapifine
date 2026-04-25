@@ -1,11 +1,19 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { Calendar as CalIcon, List as ListIcon, Plus } from 'lucide-vue-next'
+import { computed, ref } from 'vue'
+import { Calendar as CalIcon, List as ListIcon, Plus, RefreshCw, Clock, MessageSquare, Bug, Globe } from 'lucide-vue-next'
+import type { AgendamentoWithLead } from '~/composables/useAgendamentos'
 
 useHead({ title: 'Agendas e Disponibilidade - Zapifine' })
 
-const view = ref<'calendario' | 'lista'>('calendario')
+type View = 'calendario' | 'lista' | 'disponibilidade' | 'templates' | 'publico' | 'debug'
+const view = ref<View>('calendario')
+
+const { data: current } = useCurrentUser()
+const isOwner = computed(() => current.value?.funcao_user === 'OWNER')
 const dialogOpen = ref(false)
+const editDialogOpen = ref(false)
+const editing = ref<AgendamentoWithLead | null>(null)
+const syncing = ref(false)
 
 const {
   agendamentos,
@@ -14,6 +22,7 @@ const {
   googleConnectUrl,
   confirmEvent,
   cancelEvent,
+  syncFromGoogle,
 } = useAgendamentos()
 
 const { toast, confirm } = useAlerts()
@@ -36,7 +45,7 @@ async function onCancel(agendamentoId: string) {
   const ok = await confirm({
     title: 'Cancelar agendamento',
     description:
-      'O evento será removido do Google Calendar. Esta ação não pode ser desfeita.',
+      'O evento será removido do Google Calendar e os convidados serão notificados.',
     confirmLabel: 'Cancelar agendamento',
     variant: 'danger',
   })
@@ -46,6 +55,29 @@ async function onCancel(agendamentoId: string) {
     toast.success('Agendamento cancelado.')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Falha ao cancelar.')
+  }
+}
+
+function onEdit(ag: AgendamentoWithLead) {
+  if (ag.status_agenda === 'Cancelado') {
+    toast.error('Não é possível editar um agendamento cancelado.')
+    return
+  }
+  editing.value = ag
+  editDialogOpen.value = true
+}
+
+async function onSync() {
+  syncing.value = true
+  try {
+    const res = await syncFromGoogle()
+    toast.success(
+      `Sync ok. ${res.upserted} importados, ${res.cancelled} cancelados${res.full_resync ? ' (full resync)' : ''}.`,
+    )
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha na sincronização.')
+  } finally {
+    syncing.value = false
   }
 }
 </script>
@@ -58,10 +90,16 @@ async function onCancel(agendamentoId: string) {
       </h1>
 
       <div class="flex items-center gap-2">
-        <Button v-if="isGoogleConnected" @click="dialogOpen = true">
-          <Plus class="h-4 w-4" />
-          Novo Agendamento
-        </Button>
+        <template v-if="isGoogleConnected">
+          <Button variant="outline" :disabled="syncing" @click="onSync">
+            <RefreshCw class="h-4 w-4" :class="syncing ? 'animate-spin' : ''" />
+            Sincronizar
+          </Button>
+          <Button @click="dialogOpen = true">
+            <Plus class="h-4 w-4" />
+            Novo Agendamento
+          </Button>
+        </template>
 
         <Button
           v-else
@@ -79,9 +117,13 @@ async function onCancel(agendamentoId: string) {
       </div>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div
+      :class="['calendario', 'lista'].includes(view)
+        ? 'grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]'
+        : 'space-y-0'"
+    >
       <Tabs v-model="view" class="gap-4">
-        <TabsList class="h-10 p-1">
+        <TabsList class="h-10 p-1 flex-wrap">
           <TabsTrigger value="calendario" class="px-4">
             <CalIcon class="h-4 w-4" />
             Calendário
@@ -90,22 +132,55 @@ async function onCancel(agendamentoId: string) {
             <ListIcon class="h-4 w-4" />
             Lista
           </TabsTrigger>
+          <TabsTrigger value="disponibilidade" class="px-4">
+            <Clock class="h-4 w-4" />
+            Disponibilidade
+          </TabsTrigger>
+          <TabsTrigger v-if="isOwner" value="templates" class="px-4">
+            <MessageSquare class="h-4 w-4" />
+            Templates
+          </TabsTrigger>
+          <TabsTrigger v-if="isOwner" value="publico" class="px-4">
+            <Globe class="h-4 w-4" />
+            Página pública
+          </TabsTrigger>
+          <TabsTrigger v-if="isOwner" value="debug" class="px-4">
+            <Bug class="h-4 w-4" />
+            Lembretes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="calendario">
-          <AgendasCalendarView :agendamentos="agendamentos ?? []" />
+          <AgendasCalendarView
+            :agendamentos="agendamentos ?? []"
+            @select="onEdit"
+          />
         </TabsContent>
         <TabsContent value="lista">
           <AgendasListView
             :agendamentos="agendamentos ?? []"
             :loading="pending"
+            @edit="onEdit"
             @confirm="onConfirm($event.id)"
             @cancel="onCancel($event.id)"
           />
         </TabsContent>
+        <TabsContent value="disponibilidade">
+          <AgendasDisponibilidadeTab />
+        </TabsContent>
+        <TabsContent v-if="isOwner" value="templates">
+          <AgendasTemplatesTab />
+        </TabsContent>
+        <TabsContent v-if="isOwner" value="publico">
+          <AgendasPublicoTab />
+        </TabsContent>
+        <TabsContent v-if="isOwner" value="debug">
+          <AgendasLembretesDebugTab />
+        </TabsContent>
       </Tabs>
 
       <AgendasNotificationsPanel
+        v-if="['calendario', 'lista'].includes(view)"
         :agendamentos="agendamentos ?? []"
         @confirm="onConfirm($event.id)"
         @cancel="onCancel($event.id)"
@@ -113,5 +188,9 @@ async function onCancel(agendamentoId: string) {
     </div>
 
     <AgendasNovoAgendamentoDialog v-model:open="dialogOpen" />
+    <AgendasEditarAgendamentoDialog
+      v-model:open="editDialogOpen"
+      :agendamento="editing"
+    />
   </div>
 </template>

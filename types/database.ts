@@ -14,45 +14,360 @@ export type Database = {
   }
   public: {
     Tables: {
+      agenda_excecoes: {
+        Row: {
+          companie_id: string
+          created_at: string | null
+          data: string
+          end_time: string | null
+          id: string
+          kind: string
+          motivo: string | null
+          start_time: string | null
+          user_id: string
+        }
+        Insert: {
+          companie_id: string
+          created_at?: string | null
+          data: string
+          end_time?: string | null
+          id?: string
+          kind: string
+          motivo?: string | null
+          start_time?: string | null
+          user_id: string
+        }
+        Update: {
+          companie_id?: string
+          created_at?: string | null
+          data?: string
+          end_time?: string | null
+          id?: string
+          kind?: string
+          motivo?: string | null
+          start_time?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_excecoes_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_excecoes_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "agenda_excecoes_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "agenda_excecoes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_excecoes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      agenda_horarios_semanal: {
+        Row: {
+          ativo: boolean | null
+          companie_id: string
+          created_at: string | null
+          end_time: string
+          id: string
+          start_time: string
+          user_id: string
+          weekday: number
+        }
+        Insert: {
+          ativo?: boolean | null
+          companie_id: string
+          created_at?: string | null
+          end_time: string
+          id?: string
+          start_time: string
+          user_id: string
+          weekday: number
+        }
+        Update: {
+          ativo?: boolean | null
+          companie_id?: string
+          created_at?: string | null
+          end_time?: string
+          id?: string
+          start_time?: string
+          user_id?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_horarios_semanal_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_horarios_semanal_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "agenda_horarios_semanal_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "agenda_horarios_semanal_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_horarios_semanal_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      agenda_lembretes: {
+        Row: {
+          agendamento_id: string
+          attempts: number
+          channel: string
+          created_at: string | null
+          fire_at: string
+          id: string
+          last_error: string | null
+          payload: Json | null
+          sent_at: string | null
+          status: string
+          target: string | null
+        }
+        Insert: {
+          agendamento_id: string
+          attempts?: number
+          channel: string
+          created_at?: string | null
+          fire_at: string
+          id?: string
+          last_error?: string | null
+          payload?: Json | null
+          sent_at?: string | null
+          status?: string
+          target?: string | null
+        }
+        Update: {
+          agendamento_id?: string
+          attempts?: number
+          channel?: string
+          created_at?: string | null
+          fire_at?: string
+          id?: string
+          last_error?: string | null
+          payload?: Json | null
+          sent_at?: string | null
+          status?: string
+          target?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_lembretes_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agenda_templates: {
+        Row: {
+          ativo: boolean
+          body: string
+          channel: string
+          companie_id: string
+          created_at: string | null
+          id: string
+          kind: string
+          minutes_before: number | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          body: string
+          channel: string
+          companie_id: string
+          created_at?: string | null
+          id?: string
+          kind: string
+          minutes_before?: number | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          body?: string
+          channel?: string
+          companie_id?: string
+          created_at?: string | null
+          id?: string
+          kind?: string
+          minutes_before?: number | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agenda_templates_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_templates_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "agenda_templates_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+        ]
+      }
+      agendamento_attendees: {
+        Row: {
+          agendamento_id: string
+          created_at: string | null
+          display_name: string | null
+          email: string
+          id: string
+          is_organizer: boolean | null
+          lead_id: number | null
+          response_status: string | null
+        }
+        Insert: {
+          agendamento_id: string
+          created_at?: string | null
+          display_name?: string | null
+          email: string
+          id?: string
+          is_organizer?: boolean | null
+          lead_id?: number | null
+          response_status?: string | null
+        }
+        Update: {
+          agendamento_id?: string
+          created_at?: string | null
+          display_name?: string | null
+          email?: string
+          id?: string
+          is_organizer?: boolean | null
+          lead_id?: number | null
+          response_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agendamento_attendees_agendamento_id_fkey"
+            columns: ["agendamento_id"]
+            isOneToOne: false
+            referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamento_attendees_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agendamentos: {
         Row: {
           companie_id: string | null
           created_at: string
+          description: string | null
           gg_end: string | null
           gg_link: string | null
           gg_start: string | null
           gg_title: string | null
           id: string
           lead_id: number | null
+          location: string | null
+          meet_link: string | null
           status_agenda:
             | Database["public"]["Enums"]["enum_status_agenda"]
             | null
+          updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           companie_id?: string | null
           created_at?: string
+          description?: string | null
           gg_end?: string | null
           gg_link?: string | null
           gg_start?: string | null
           gg_title?: string | null
           id: string
           lead_id?: number | null
+          location?: string | null
+          meet_link?: string | null
           status_agenda?:
             | Database["public"]["Enums"]["enum_status_agenda"]
             | null
+          updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           companie_id?: string | null
           created_at?: string
+          description?: string | null
           gg_end?: string | null
           gg_link?: string | null
           gg_start?: string | null
           gg_title?: string | null
           id?: string
           lead_id?: number | null
+          location?: string | null
+          meet_link?: string | null
           status_agenda?:
             | Database["public"]["Enums"]["enum_status_agenda"]
             | null
+          updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -82,6 +397,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "leads"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -341,6 +670,10 @@ export type Database = {
       }
       companies: {
         Row: {
+          agenda_publico_ativo: boolean | null
+          agenda_publico_descricao: string | null
+          agenda_publico_slug: string | null
+          agenda_publico_titulo: string | null
           bairro_empresa: string | null
           business_hours: string | null
           cep_empresa: string | null
@@ -354,7 +687,13 @@ export type Database = {
           estado_empresa: string | null
           funil_incial_id: number | null
           gg_access_token: string | null
+          gg_calendar_id: string | null
+          gg_email: string | null
           gg_refresh_token: string | null
+          gg_scopes: string[] | null
+          gg_sync_token: string | null
+          gg_synced_at: string | null
+          gg_token_expires_at: string | null
           id: string
           link_agendamento: string | null
           logo_url: string | null
@@ -368,6 +707,10 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          agenda_publico_ativo?: boolean | null
+          agenda_publico_descricao?: string | null
+          agenda_publico_slug?: string | null
+          agenda_publico_titulo?: string | null
           bairro_empresa?: string | null
           business_hours?: string | null
           cep_empresa?: string | null
@@ -381,7 +724,13 @@ export type Database = {
           estado_empresa?: string | null
           funil_incial_id?: number | null
           gg_access_token?: string | null
+          gg_calendar_id?: string | null
+          gg_email?: string | null
           gg_refresh_token?: string | null
+          gg_scopes?: string[] | null
+          gg_sync_token?: string | null
+          gg_synced_at?: string | null
+          gg_token_expires_at?: string | null
           id?: string
           link_agendamento?: string | null
           logo_url?: string | null
@@ -395,6 +744,10 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          agenda_publico_ativo?: boolean | null
+          agenda_publico_descricao?: string | null
+          agenda_publico_slug?: string | null
+          agenda_publico_titulo?: string | null
           bairro_empresa?: string | null
           business_hours?: string | null
           cep_empresa?: string | null
@@ -408,7 +761,13 @@ export type Database = {
           estado_empresa?: string | null
           funil_incial_id?: number | null
           gg_access_token?: string | null
+          gg_calendar_id?: string | null
+          gg_email?: string | null
           gg_refresh_token?: string | null
+          gg_scopes?: string[] | null
+          gg_sync_token?: string | null
+          gg_synced_at?: string | null
+          gg_token_expires_at?: string | null
           id?: string
           link_agendamento?: string | null
           logo_url?: string | null
@@ -744,6 +1103,8 @@ export type Database = {
       }
       leads: {
         Row: {
+          avatar_fetched_at: string | null
+          avatar_url: string | null
           cidade: string | null
           coluna_id: number | null
           companies_id: string | null
@@ -768,6 +1129,8 @@ export type Database = {
           whatsapp_validado: boolean | null
         }
         Insert: {
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
           cidade?: string | null
           coluna_id?: number | null
           companies_id?: string | null
@@ -792,6 +1155,8 @@ export type Database = {
           whatsapp_validado?: boolean | null
         }
         Update: {
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
           cidade?: string | null
           coluna_id?: number | null
           companies_id?: string | null
@@ -1397,6 +1762,58 @@ export type Database = {
           },
         ]
       }
+      setores: {
+        Row: {
+          company_id: string
+          cor: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          cor?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          cor?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "setores_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "setores_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "setores_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+        ]
+      }
       token_user: {
         Row: {
           card_brand: string | null
@@ -1477,6 +1894,7 @@ export type Database = {
           is_onboarding_complete: boolean | null
           last_login: string | null
           nome: string | null
+          setor_id: string | null
           status: Database["public"]["Enums"]["enum_status_user"] | null
           stripe_customer_id: string | null
         }
@@ -1493,6 +1911,7 @@ export type Database = {
           is_onboarding_complete?: boolean | null
           last_login?: string | null
           nome?: string | null
+          setor_id?: string | null
           status?: Database["public"]["Enums"]["enum_status_user"] | null
           stripe_customer_id?: string | null
         }
@@ -1509,6 +1928,7 @@ export type Database = {
           is_onboarding_complete?: boolean | null
           last_login?: string | null
           nome?: string | null
+          setor_id?: string | null
           status?: Database["public"]["Enums"]["enum_status_user"] | null
           stripe_customer_id?: string | null
         }
@@ -1534,31 +1954,56 @@ export type Database = {
             referencedRelation: "vw_user_dashboard"
             referencedColumns: ["company_id"]
           },
+          {
+            foreignKeyName: "users_setor_id_fkey"
+            columns: ["setor_id"]
+            isOneToOne: false
+            referencedRelation: "setores"
+            referencedColumns: ["id"]
+          },
         ]
       }
       whats_conversa: {
         Row: {
+          assigned_at: string | null
+          assigned_to: string | null
           companies_id: string | null
           created_at: string
+          grupoNome: string | null
           id: number
+          isgrupo: boolean | null
+          last_read_at: string | null
           lead_id: number | null
           remoteJid: string | null
+          setor_id: string | null
           user_id: string | null
         }
         Insert: {
+          assigned_at?: string | null
+          assigned_to?: string | null
           companies_id?: string | null
           created_at?: string
+          grupoNome?: string | null
           id?: number
+          isgrupo?: boolean | null
+          last_read_at?: string | null
           lead_id?: number | null
           remoteJid?: string | null
+          setor_id?: string | null
           user_id?: string | null
         }
         Update: {
+          assigned_at?: string | null
+          assigned_to?: string | null
           companies_id?: string | null
           created_at?: string
+          grupoNome?: string | null
           id?: number
+          isgrupo?: boolean | null
+          last_read_at?: string | null
           lead_id?: number | null
           remoteJid?: string | null
+          setor_id?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -1591,6 +2036,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "whats_conversa_setor_id_fkey"
+            columns: ["setor_id"]
+            isOneToOne: false
+            referencedRelation: "setores"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "whats_conversa_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
@@ -1611,10 +2063,10 @@ export type Database = {
           created_at: string
           deletada: boolean | null
           editada: boolean | null
-          interna: boolean | null
           id: number
           id_mensagem: string | null
           ingrupo: boolean | null
+          interna: boolean | null
           lead_id: number | null
           mensagem: string | null
           midia_url: string | null
@@ -1631,10 +2083,10 @@ export type Database = {
           created_at?: string
           deletada?: boolean | null
           editada?: boolean | null
-          interna?: boolean | null
           id?: number
           id_mensagem?: string | null
           ingrupo?: boolean | null
+          interna?: boolean | null
           lead_id?: number | null
           mensagem?: string | null
           midia_url?: string | null
@@ -1651,10 +2103,10 @@ export type Database = {
           created_at?: string
           deletada?: boolean | null
           editada?: boolean | null
-          interna?: boolean | null
           id?: number
           id_mensagem?: string | null
           ingrupo?: boolean | null
+          interna?: boolean | null
           lead_id?: number | null
           mensagem?: string | null
           midia_url?: string | null
@@ -1684,6 +2136,35 @@ export type Database = {
           },
         ]
       }
+      whats_presence: {
+        Row: {
+          conversa_id: number
+          media: string | null
+          state: string
+          updated_at: string
+        }
+        Insert: {
+          conversa_id: number
+          media?: string | null
+          state: string
+          updated_at?: string
+        }
+        Update: {
+          conversa_id?: number
+          media?: string | null
+          state?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whats_presence_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: true
+            referencedRelation: "whats_conversa"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_connections: {
         Row: {
           apikey_evo: string | null
@@ -1703,6 +2184,7 @@ export type Database = {
           instance_name: string | null
           is_connected: boolean | null
           last_connected_at: string | null
+          n8n_workflow_id: string | null
           phone_number: string | null
           provider: Database["public"]["Enums"]["enum_whatsapp_provider"]
           qr_code_url: string | null
@@ -1728,6 +2210,7 @@ export type Database = {
           instance_name?: string | null
           is_connected?: boolean | null
           last_connected_at?: string | null
+          n8n_workflow_id?: string | null
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["enum_whatsapp_provider"]
           qr_code_url?: string | null
@@ -1753,6 +2236,7 @@ export type Database = {
           instance_name?: string | null
           is_connected?: boolean | null
           last_connected_at?: string | null
+          n8n_workflow_id?: string | null
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["enum_whatsapp_provider"]
           qr_code_url?: string | null
@@ -1972,19 +2456,58 @@ export type Database = {
       }
     }
     Functions: {
+      chat_list: {
+        Args: { p_company_id: string }
+        Returns: {
+          assigned_nome: string
+          assigned_to: string
+          companies_id: string
+          created_at: string
+          id: number
+          last_message: string
+          last_message_at: string
+          last_message_status: Database["public"]["Enums"]["enum_status_mensagem"]
+          last_message_tipo: string
+          last_read_at: string
+          lead_avatar_url: string
+          lead_ia_ativa: boolean
+          lead_id: number
+          lead_nome: string
+          lead_numero: string
+          lead_resumo: string
+          remoteJid: string
+          setor_cor: string
+          setor_id: string
+          setor_nome: string
+          unread_count: number
+        }[]
+      }
       current_company_id: { Args: never; Returns: string }
-      get_current_user_profile: { Args: never; Returns: Json }
       empresas_vencem_hoje: {
         Args: never
         Returns: {
           companie_id: string
         }[]
       }
+      fn_current_user_companie_id: { Args: never; Returns: string }
+      get_current_user_profile: { Args: never; Returns: Json }
       increment_follows_enviados: {
         Args: { p_lead_id: number }
         Returns: number
       }
       is_owner_of_company: { Args: { c_id: string }; Returns: boolean }
+      set_presence: {
+        Args: { p_media?: string; p_remote_jid: string; p_state: string }
+        Returns: undefined
+      }
+      transferir_conversa_setor: {
+        Args: { p_conversa_id: number; p_nota?: string; p_setor_id: string }
+        Returns: Json
+      }
+      transferir_conversa_user: {
+        Args: { p_conversa_id: number; p_nota?: string; p_to_user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       enum_notification:
@@ -1994,6 +2517,7 @@ export type Database = {
         | "alerta"
         | "atencao"
         | "pagamento"
+        | "transferencia"
       enum_status_agenda: "Confirmado" | "Pendente" | "Cancelado"
       enum_status_mensagem: "Recebida" | "Enviada" | "Entregue" | "Lida"
       enum_status_pgto: "Pendente" | "Paga" | "Cancelada" | "Vencida"
@@ -2137,6 +2661,7 @@ export const Constants = {
         "alerta",
         "atencao",
         "pagamento",
+        "transferencia",
       ],
       enum_status_agenda: ["Confirmado", "Pendente", "Cancelado"],
       enum_status_mensagem: ["Recebida", "Enviada", "Entregue", "Lida"],
