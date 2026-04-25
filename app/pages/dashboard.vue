@@ -14,13 +14,13 @@ const cards = computed(() => {
     {
       label: 'Total de Mensagens',
       value: s?.totalMensagens ?? 0,
-      hint: 'desde a semana passada',
+      hint: 'todas as mensagens registradas',
       accent: 'emerald' as const,
     },
     {
       label: 'Taxa de Conversão',
       value: `${s?.taxaConversao ?? 0}%`,
-      hint: 'desde a semana passada',
+      hint: 'leads convertidos',
       accent: 'cyan' as const,
     },
     {
@@ -29,24 +29,34 @@ const cards = computed(() => {
         s?.tempoMedioRespostaSeg != null
           ? `${s.tempoMedioRespostaSeg}s`
           : '—',
-      hint: 'desde a semana passada',
+      hint: 'média entre lead e resposta',
       accent: 'violet' as const,
     },
     {
-      label: 'Leads Gerados',
-      value: s?.totalLeads ?? 0,
-      hint: 'desde a semana passada',
+      label: 'Leads na Semana',
+      value: s?.leadsUltimaSemana ?? 0,
+      hint: 'últimos 7 dias',
       accent: 'amber' as const,
     },
   ]
 })
 
-const metrics = [
-  { label: 'Taxa de Resposta', value: 47, color: 'emerald' as const },
-  { label: 'Precisão das Respostas', value: 34, color: 'blue' as const },
-  { label: 'Satisfação do Cliente', value: 92, color: 'emerald' as const },
-  { label: 'Taxa de Conclusão', value: 41, color: 'blue' as const },
-]
+const metrics = computed(() => {
+  const s = stats.value?.statusDesempenho
+  return [
+    { label: 'Taxa de Resposta', value: s?.taxa_resposta ?? 0, color: 'emerald' as const },
+    { label: 'Precisão das Respostas', value: s?.precisao_respostas ?? 0, color: 'blue' as const },
+    { label: 'Satisfação do Cliente', value: s?.satisfacao_cliente ?? 0, color: 'emerald' as const },
+    { label: 'Taxa de Conclusão', value: s?.taxa_conclusao ?? 0, color: 'blue' as const },
+  ]
+})
+
+const msgsChart = computed(() => stats.value?.graficoMensagens ?? { labels: [], valores: [] })
+const convChart = computed(() => stats.value?.graficoConversao ?? { labels: [], valores: [] })
+
+function pctFormatter(v: number) {
+  return `${Math.round(v)}%`
+}
 </script>
 
 <template>
@@ -74,9 +84,55 @@ const metrics = [
     <div class="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
+          <CardTitle class="text-xl">Mensagens (5 semanas)</CardTitle>
+          <CardDescription>Volume semanal — S5 = semana atual</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p
+            v-if="statsLoading"
+            class="py-8 text-center text-sm text-muted-foreground"
+          >
+            Carregando...
+          </p>
+          <DashboardLineChart
+            v-else
+            :labels="msgsChart.labels"
+            :values="msgsChart.valores"
+            color="#10b981"
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-xl">Taxa de Conversão (%)</CardTitle>
+          <CardDescription>Leads convertidos por semana</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p
+            v-if="statsLoading"
+            class="py-8 text-center text-sm text-muted-foreground"
+          >
+            Carregando...
+          </p>
+          <DashboardLineChart
+            v-else
+            :labels="convChart.labels"
+            :values="convChart.valores"
+            color="#0ea5e9"
+            :y-formatter="pctFormatter"
+            :y-max-override="100"
+          />
+        </CardContent>
+      </Card>
+    </div>
+
+    <div class="grid gap-4 lg:grid-cols-2">
+      <Card>
+        <CardHeader>
           <CardTitle class="text-xl">Atividades Recentes</CardTitle>
           <CardDescription>
-            Visualize e gerencie as conversas mais recentes
+            Visualize as conversas mais recentes
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -124,14 +180,14 @@ const metrics = [
 
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <p class="text-sm text-muted-foreground">Total de Mensagens</p>
+              <p class="text-sm text-muted-foreground">Mensagens</p>
               <p class="mt-1 text-2xl font-semibold">
                 {{ stats?.mensagensEstaSemana ?? 0 }}
               </p>
               <p class="text-xs text-muted-foreground">esta semana</p>
             </div>
             <div>
-              <p class="text-sm text-muted-foreground">Total de Mensagens</p>
+              <p class="text-sm text-muted-foreground">Mensagens</p>
               <p class="mt-1 text-2xl font-semibold">
                 {{ stats?.mensagensSemanaPassada ?? 0 }}
               </p>

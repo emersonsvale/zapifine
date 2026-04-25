@@ -6,6 +6,7 @@ type Body = {
   email?: string
   role?: 'EMPLOYEE' | 'VIEWER'
   companieId?: string | null
+  setorId?: string | null
 }
 
 export default defineEventHandler(async (event) => {
@@ -45,6 +46,7 @@ export default defineEventHandler(async (event) => {
   const email = body.email?.trim().toLowerCase()
   const role = body.role ?? 'EMPLOYEE'
   const companieId = body.companieId ?? me.companie_id
+  const setorId = body.setorId ?? null
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     throw createError({ statusCode: 400, statusMessage: 'E-mail inválido.' })
@@ -85,7 +87,11 @@ export default defineEventHandler(async (event) => {
   if (invited.user?.id) {
     const { error: patchErr } = await admin
       .from('users')
-      .update({ companie_id: companieId, funcao_user: role })
+      .update({
+        companie_id: companieId,
+        funcao_user: role,
+        setor_id: setorId,
+      } as never)
       .eq('id', invited.user.id)
     if (patchErr) {
       return {

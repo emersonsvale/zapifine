@@ -7,13 +7,25 @@ import {
   AlertTriangle,
   AlertCircle,
   CreditCard,
+  ArrowRightLeft,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
 type Tipo = Database['public']['Enums']['enum_notification']
 
-const { notifications, unreadCount, markAsRead, markAllAsRead } =
+const { notifications, unreadCount, markAsRead, markAllAsRead, openNotificationTarget } =
   useNotifications()
+
+type Notification = Database['public']['Tables']['notifications']['Row']
+
+async function onNotificationClick(n: Notification) {
+  if (!n.read) {
+    try {
+      await markAsRead(n.id)
+    } catch {}
+  }
+  openNotificationTarget(n)
+}
 
 function iconFor(tipo: Tipo | null) {
   switch (tipo) {
@@ -29,6 +41,8 @@ function iconFor(tipo: Tipo | null) {
       return AlertCircle
     case 'pagamento':
       return CreditCard
+    case 'transferencia':
+      return ArrowRightLeft
     default:
       return Bell
   }
@@ -48,6 +62,8 @@ function colorFor(tipo: Tipo | null) {
       return 'bg-red-500/15 text-red-400'
     case 'atencao':
       return 'bg-orange-500/15 text-orange-400'
+    case 'transferencia':
+      return 'bg-sky-500/15 text-sky-400'
     default:
       return 'bg-muted text-muted-foreground'
   }
@@ -107,8 +123,9 @@ function formatDate(iso: string | null) {
           <li
             v-for="n in notifications"
             :key="n.id"
-            class="px-4 py-3"
+            class="cursor-pointer px-4 py-3 transition-colors hover:bg-muted/50"
             :class="{ 'bg-primary/[0.04]': !n.read }"
+            @click="onNotificationClick(n)"
           >
             <div class="flex items-start gap-3">
               <div
@@ -125,14 +142,6 @@ function formatDate(iso: string | null) {
                 <p class="mt-1 text-xs text-muted-foreground">
                   {{ formatDate(n.created_at) }}
                 </p>
-                <button
-                  v-if="!n.read"
-                  type="button"
-                  class="mt-2 text-xs font-medium text-primary hover:text-primary/80"
-                  @click="markAsRead(n.id)"
-                >
-                  Marcar como lido
-                </button>
               </div>
             </div>
           </li>

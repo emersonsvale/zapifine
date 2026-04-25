@@ -9,7 +9,23 @@ const emit = defineEmits<{
   submit: [payload: { url: string; caption?: string; filename?: string; mimetype?: string; mediaType?: string }]
 }>()
 
-const MAX_BYTES = 16 * 1024 * 1024
+const MAX_BYTES_BY_TYPE: Record<'image' | 'video' | 'audio' | 'document', number> = {
+  image: 3 * 1024 * 1024,
+  video: 16 * 1024 * 1024,
+  audio: 8 * 1024 * 1024,
+  document: 10 * 1024 * 1024,
+}
+
+function detectMediaType(mime: string): 'image' | 'video' | 'audio' | 'document' {
+  if (mime.startsWith('image/')) return 'image'
+  if (mime.startsWith('video/')) return 'video'
+  if (mime.startsWith('audio/')) return 'audio'
+  return 'document'
+}
+
+function prettyMB(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(0)}MB`
+}
 const supabase = useSupabaseClient<Database>()
 const authUser = useSupabaseUser()
 
@@ -22,13 +38,9 @@ const err = ref('')
 const dragActive = ref(false)
 const urlFallback = ref('')
 
-const mediaType = computed<'image' | 'video' | 'audio' | 'document'>(() => {
-  const mime = file.value?.type ?? ''
-  if (mime.startsWith('image/')) return 'image'
-  if (mime.startsWith('video/')) return 'video'
-  if (mime.startsWith('audio/')) return 'audio'
-  return 'document'
-})
+const mediaType = computed<'image' | 'video' | 'audio' | 'document'>(() =>
+  detectMediaType(file.value?.type ?? ''),
+)
 
 function resetState() {
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
@@ -51,8 +63,16 @@ watch(
 function acceptFile(f: File | null) {
   if (!f) return
   err.value = ''
-  if (f.size > MAX_BYTES) {
-    err.value = 'Arquivo acima de 16MB (limite WhatsApp).'
+  const kind = detectMediaType(f.type ?? '')
+  const limit = MAX_BYTES_BY_TYPE[kind]
+  if (f.size > limit) {
+    const labels: Record<typeof kind, string> = {
+      image: 'imagem',
+      video: 'vídeo',
+      audio: 'áudio',
+      document: 'documento',
+    }
+    err.value = `${labels[kind]} acima do limite de ${prettyMB(limit)}.`
     return
   }
   if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
@@ -140,7 +160,12 @@ async function uploadAndSubmit() {
       if (upErr) throw upErr
       progress.value = 80
       const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path)
-      finalUrl = urlData.publicUrl
+      // CF Worker em api.zapifine.com bloqueia /storage/*. Evolution Go precisa baixar
+      // a URL direto, então força o host do Supabase.
+      finalUrl = urlData.publicUrl.replace(
+        'https://api.zapifine.com/',
+        'https://wpyxqtqlppsvuiwquigu.supabase.co/',
+      )
       filename = f.name
       mimetype = inferredMime
       progress.value = 100
@@ -186,7 +211,7 @@ function prettySize(b: number) {
       <DialogHeader>
         <DialogTitle>Enviar mídia</DialogTitle>
         <DialogDescription>
-          Arraste um arquivo, cole (Ctrl+V) ou selecione. Máx 16MB.
+          Arraste um arquivo, cole (Ctrl+V) ou selecione. Limites: imagem 3MB, vídeo 16MB, áudio 8MB, documento 10MB.
         </DialogDescription>
       </DialogHeader>
 
