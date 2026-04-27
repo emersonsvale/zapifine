@@ -10,6 +10,52 @@ export default defineNuxtPlugin(() => {
   let channel: ReturnType<typeof supabase.channel> | null = null
   let audioCtx: AudioContext | null = null
 
+  function notifSupported() {
+    return typeof window !== 'undefined' && 'Notification' in window
+  }
+
+  async function ensureNotifPermission() {
+    if (!notifSupported()) return false
+    if (Notification.permission === 'granted') return true
+    if (Notification.permission === 'denied') return false
+    try {
+      const res = await Notification.requestPermission()
+      return res === 'granted'
+    } catch {
+      return false
+    }
+  }
+
+  // Pede permissão no primeiro gesto do usuário (Chrome exige user activation)
+  if (typeof window !== 'undefined' && notifSupported() && Notification.permission === 'default') {
+    const handler = () => { void ensureNotifPermission() }
+    window.addEventListener('click', handler, { once: true, capture: true })
+    window.addEventListener('keydown', handler, { once: true, capture: true })
+  }
+
+  function showSystemNotification(opts: {
+    title: string
+    body: string
+    convId: number | null
+  }) {
+    if (!notifSupported() || Notification.permission !== 'granted') return
+    try {
+      const n = new Notification(opts.title, {
+        body: opts.body,
+        icon: '/favicon.png',
+        badge: '/favicon.png',
+        tag: opts.convId ? `chat-${opts.convId}` : 'chat',
+        renotify: true,
+      } as NotificationOptions & { renotify?: boolean })
+      n.onclick = () => {
+        window.focus()
+        if (opts.convId) router.push(`/multiatendimento/chats?conv=${opts.convId}`)
+        else router.push('/multiatendimento/chats')
+        n.close()
+      }
+    } catch {}
+  }
+
   function playBeep() {
     try {
       const Ctx =
@@ -123,13 +169,25 @@ export default defineNuxtPlugin(() => {
           const path =
             typeof window !== 'undefined' ? window.location.pathname : ''
           const onChatsPage = path.startsWith('/multiatendimento/chats')
-          if (onChatsPage) return
+          const tabHidden = typeof document !== 'undefined' && document.visibilityState !== 'visible'
+
+          // Já está vendo a tela de chats com aba focada: nada a fazer
+          if (onChatsPage && !tabHidden) return
 
           const convId = row.whats_conversa_id
           const title = convId ? await resolveConvName(convId) : 'WhatsApp'
           const message = previewOf(row)
 
           playBeep()
+
+          // Tab em background OU outra aba aberta: usa notificação nativa do SO
+          if (tabHidden) {
+            showSystemNotification({ title, body: message, convId })
+            return
+          }
+
+          // Tab visível em outra página do app: toast in-app + tenta system notif também
+          showSystemNotification({ title, body: message, convId })
           toast.info(message, {
             title,
             timeout: 7000,
