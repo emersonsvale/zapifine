@@ -109,6 +109,17 @@ async function handleSignIn() {
         <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
         {{ loading ? 'Entrando...' : 'Sign In' }}
       </Button>
+
+      <div class="relative my-2">
+        <div class="absolute inset-0 flex items-center">
+          <span class="w-full border-t border-border" />
+        </div>
+        <div class="relative flex justify-center text-xs uppercase">
+          <span class="bg-background px-2 text-muted-foreground">ou</span>
+        </div>
+      </div>
+
+      <GoogleAuthButton @error="(m) => (errorMsg = m)" />
     </form>
 
     <p class="mt-6 text-center text-sm text-muted-foreground">

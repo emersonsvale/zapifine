@@ -28,3 +28,6 @@ n8n-workflows/
 
 # Pasta local com arquivos sensíveis (OAuth client secrets, anotações)
 .arquivos/
+
+# Docs internos (infra/worker, não versionados)
+docs/
