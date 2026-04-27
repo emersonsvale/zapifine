@@ -75,6 +75,7 @@ async function loadMeta() {
     )
     company.value = res.company
     members.value = res.members
+    // Auto-seleciona se só houver 1 atendente; mais de 1 = "Qualquer" (null) por padrão
     if (res.members.length === 1) selectedUser.value = res.members[0]!.id
   } catch (err) {
     errorMsg.value = (err as { data?: { statusMessage?: string } })?.data?.statusMessage
@@ -85,16 +86,21 @@ async function loadMeta() {
 }
 
 async function loadSlots() {
-  if (!selectedUser.value || !selectedDate.value) {
+  if (!selectedDate.value) {
     slots.value = []
     return
   }
   loadingSlots.value = true
   selectedSlot.value = null
   try {
+    const q: Record<string, string | number> = {
+      date: selectedDate.value,
+      duration: duration.value,
+    }
+    if (selectedUser.value) q.user_id = selectedUser.value
     const res = await $fetch<{ slots: Array<{ start: string; end: string }> }>(
       `/api/public/agendas/${encodeURIComponent(slug.value)}/slots`,
-      { query: { user_id: selectedUser.value, date: selectedDate.value, duration: duration.value } },
+      { query: q },
     )
     slots.value = res.slots
   } catch (err) {
@@ -185,7 +191,7 @@ function pickDate(cell: Cell) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 async function onSubmit() {
-  if (!selectedSlot.value || !selectedUser.value) {
+  if (!selectedSlot.value) {
     errorMsg.value = 'Selecione um horário.'
     return
   }
@@ -206,7 +212,7 @@ async function onSubmit() {
       {
         method: 'POST',
         body: {
-          user_id: selectedUser.value,
+          ...(selectedUser.value ? { user_id: selectedUser.value } : {}),
           start: buildIso(selectedSlot.value.start),
           end: buildIso(selectedSlot.value.end),
           timezone: tz.value,
@@ -350,7 +356,7 @@ function backToPick() {
                 v-model="selectedUser"
                 class="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
               >
-                <option :value="null" disabled>Selecione</option>
+                <option :value="null">Qualquer atendente</option>
                 <option v-for="m in members" :key="m.id" :value="m.id">
                   {{ m.nome ?? 'Atendente' }}
                 </option>
@@ -450,9 +456,6 @@ function backToPick() {
                 </p>
                 <div v-if="loadingSlots" class="py-6 text-center text-zinc-400">
                   <Loader2 class="h-5 w-5 mx-auto animate-spin" />
-                </div>
-                <div v-else-if="!selectedUser" class="py-6 text-center text-sm text-zinc-500">
-                  Selecione o atendente.
                 </div>
                 <div
                   v-else-if="!slots.length"

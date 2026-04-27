@@ -27,7 +27,6 @@ export default defineEventHandler(async (event) => {
   if (!slug) throw createError({ statusCode: 400, statusMessage: 'slug obrigatório.' })
 
   const body = await readBody<Body>(event)
-  if (!body.user_id) throw createError({ statusCode: 400, statusMessage: 'user_id obrigatório.' })
   if (!body.start || !ISO_RE.test(body.start)) {
     throw createError({ statusCode: 400, statusMessage: 'start (ISO 8601) obrigatório.' })
   }
@@ -65,29 +64,56 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 412, statusMessage: 'Empresa sem Google Calendar conectado.' })
   }
 
-  // Confirma user pertence à empresa
-  const { data: targetUser } = await admin
-    .from('users')
-    .select('id, companie_id, nome')
-    .eq('id', body.user_id)
-    .maybeSingle()
-  if (!targetUser || targetUser.companie_id !== company.id) {
-    throw createError({ statusCode: 404, statusMessage: 'Atendente não encontrado.' })
-  }
-
-  // Valida disponibilidade
-  const availability = await checkUserAvailability({
-    userId: body.user_id,
-    companieId: company.id,
-    startIso: body.start,
-    endIso: body.end,
-  })
-  if (!availability.available) {
-    throw createError({
-      statusCode: 409,
-      statusMessage: availability.reason ?? 'Slot indisponível.',
+  // Resolve user_id: se vier null, escolhe primeiro atendente disponível no slot
+  let resolvedUserId: string | null = body.user_id ?? null
+  if (resolvedUserId) {
+    const { data: targetUser } = await admin
+      .from('users')
+      .select('id, companie_id, nome')
+      .eq('id', resolvedUserId)
+      .maybeSingle()
+    if (!targetUser || targetUser.companie_id !== company.id) {
+      throw createError({ statusCode: 404, statusMessage: 'Atendente não encontrado.' })
+    }
+    const availability = await checkUserAvailability({
+      userId: resolvedUserId,
+      companieId: company.id,
+      startIso: body.start,
+      endIso: body.end,
     })
+    if (!availability.available) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: availability.reason ?? 'Slot indisponível.',
+      })
+    }
+  } else {
+    type UserLite = { id: string; agenda_horarios_semanal: { id: number }[] }
+    const { data: members } = await admin
+      .from('users')
+      .select('id, agenda_horarios_semanal!inner(id)')
+      .eq('companie_id', company.id)
+      .neq('status', 'Desativado')
+      .returns<UserLite[]>()
+
+    const candidates = Array.from(new Set((members ?? []).map(m => m.id)))
+    for (const uid of candidates) {
+      const av = await checkUserAvailability({
+        userId: uid,
+        companieId: company.id,
+        startIso: body.start,
+        endIso: body.end,
+      })
+      if (av.available) {
+        resolvedUserId = uid
+        break
+      }
+    }
+    if (!resolvedUserId) {
+      throw createError({ statusCode: 409, statusMessage: 'Nenhum atendente disponível neste horário.' })
+    }
   }
+  const finalUserId: string = resolvedUserId!
 
   const tz = body.timezone?.trim() || 'America/Sao_Paulo'
   const title = body.title?.trim() || `Agendamento - ${guestName}`
@@ -115,7 +141,7 @@ export default defineEventHandler(async (event) => {
     attendees: [{ email: guestEmail, displayName: guestName }],
     extendedProperties: {
       private: {
-        zapifine_user_id: body.user_id,
+        zapifine_user_id: finalUserId,
         zapifine_companie_id: company.id,
         zapifine_source: 'public_booking',
         ...(leadId ? { zapifine_lead_id: String(leadId) } : {}),
@@ -127,7 +153,7 @@ export default defineEventHandler(async (event) => {
   const { error: insErr } = await admin.from('agendamentos').insert({
     id: created.id,
     companie_id: company.id,
-    user_id: body.user_id,
+    user_id: finalUserId,
     lead_id: leadId,
     gg_title: title,
     gg_start: body.start,
@@ -173,7 +199,7 @@ export default defineEventHandler(async (event) => {
       },
     })
     await createInAppNotification({
-      userId: body.user_id,
+      userId: finalUserId,
       companyId: company.id,
       title: nTitle,
       message: nBody,
