@@ -71,16 +71,51 @@ export function useNotifications() {
   }
 
   function openNotificationTarget(n: Notification) {
-    const ref = (n as unknown as { reference_type?: string | null }).reference_type
-    if (!ref) return false
-    if (ref.startsWith('conversa:')) {
-      const convId = ref.split(':')[1]
+    const refType = (n.reference_type || '').toLowerCase()
+    const refId = n.reference_id
+    const tipo = (n.tipo || '').toLowerCase()
+
+    // 1) Roteamento por reference_type + reference_id (mais especifico)
+    if (refType === 'whats_conversa' && refId) {
+      router.push({ path: '/multiatendimento/chats', query: { conv: refId } })
+      return true
+    }
+    if (refType === 'agendamento') {
+      router.push({ path: '/agendas', ...(refId ? { query: { ag: refId } } : {}) })
+      return true
+    }
+    if (refType === 'lead' && refId) {
+      router.push(`/crm/leads/${refId}`)
+      return true
+    }
+
+    // 2) Legacy: reference_type no formato "conversa:<id>"
+    if (refType.startsWith('conversa:')) {
+      const convId = refType.split(':')[1]
       if (convId) {
         router.push({ path: '/multiatendimento/chats', query: { conv: convId } })
         return true
       }
     }
-    return false
+
+    // 3) Fallback por tipo
+    switch (tipo) {
+      case 'mensagem':
+      case 'transferencia':
+        router.push('/multiatendimento/chats')
+        return true
+      case 'agenda':
+        router.push('/agendas')
+        return true
+      case 'lead':
+        router.push('/crm/funis')
+        return true
+      case 'pagamento':
+        router.push('/assinatura')
+        return true
+      default:
+        return false
+    }
   }
 
   // Realtime: insert + update
