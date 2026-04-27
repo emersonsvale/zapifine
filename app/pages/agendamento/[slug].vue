@@ -323,12 +323,16 @@ function backToPick() {
                   :src="selectedHost.foto_perfil"
                   :alt="selectedHost.nome ?? ''"
                   class="h-full w-full object-cover"
+                  referrerpolicy="no-referrer"
+                  loading="lazy"
                 >
                 <img
                   v-else-if="company.logo_url"
                   :src="company.logo_url"
                   :alt="company.name"
                   class="h-full w-full object-cover"
+                  referrerpolicy="no-referrer"
+                  loading="lazy"
                 >
               </div>
               <span class="text-sm font-medium text-zinc-700">
