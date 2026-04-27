@@ -24,7 +24,7 @@ async function handleGoogle() {
         ? `${window.location.origin}/confirm`
         : undefined
 
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo,
@@ -32,11 +32,20 @@ async function handleGoogle() {
           access_type: 'offline',
           prompt: 'consent',
         },
+        skipBrowserRedirect: true,
       },
     })
     if (error) {
       emit('error', error.message)
       loading.value = false
+      return
+    }
+    if (data?.url) {
+      const directUrl = data.url.replace(
+        'https://api.zapifine.com',
+        'https://wpyxqtqlppsvuiwquigu.supabase.co',
+      )
+      window.location.href = directUrl
     }
   } catch (err) {
     emit('error', err instanceof Error ? err.message : 'Falha no login com Google.')
