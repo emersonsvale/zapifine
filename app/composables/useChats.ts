@@ -77,6 +77,7 @@ function buildPrefixed(text: string, sig: AttendantSignature): string {
 export function useChats() {
   const supabase = useSupabaseClient<Database>()
   const authUser = useSupabaseUser()
+  const whatsApi = useWhatsApi()
 
   const companyId = useState<string | null>('chat-company-id', () => null)
   const selectedId = useState<number | null>('chat-selected', () => null)
@@ -310,23 +311,12 @@ export function useChats() {
     }
 
     try {
-      const { data: fnData, error } = await supabase.functions.invoke(
-        'send_whatsapp_rich',
-        {
-          method: 'POST',
-          body: {
-            company_id: companyId.value,
-            type: 'react',
-            number,
-            messageId: idMensagem,
-            reaction: nextReaction,
-          },
-        },
-      )
-      if (error) throw new Error(error.message)
-      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
-        throw new Error(String((fnData as { error: unknown }).error))
-      }
+      await whatsApi.react({
+        company_id: companyId.value,
+        number,
+        messageId: idMensagem,
+        reaction: nextReaction,
+      })
       await supabase
         .from('whats_mensagens_conversa')
         .update({ reacao: nextReaction || null } as never)
@@ -364,22 +354,12 @@ export function useChats() {
     }
 
     try {
-      const { data: fnData, error } = await supabase.functions.invoke(
-        'edit_whatsapp_message',
-        {
-          method: 'POST',
-          body: {
-            company_id: companyId.value,
-            chat,
-            message: trimmed,
-            messageId: idMensagem,
-          },
-        },
-      )
-      if (error) throw new Error(error.message)
-      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
-        throw new Error(String((fnData as { error: unknown }).error))
-      }
+      await whatsApi.edit({
+        company_id: companyId.value,
+        chat,
+        message: trimmed,
+        messageId: idMensagem,
+      })
       const { error: updErr } = await supabase
         .from('whats_mensagens_conversa')
         .update({ mensagem: trimmed, editada: true } as never)
@@ -414,21 +394,11 @@ export function useChats() {
     }
 
     try {
-      const { data: fnData, error } = await supabase.functions.invoke(
-        'delete_whatsapp_message',
-        {
-          method: 'POST',
-          body: {
-            company_id: companyId.value,
-            chat,
-            messageId: idMensagem,
-          },
-        },
-      )
-      if (error) throw new Error(error.message)
-      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
-        throw new Error(String((fnData as { error: unknown }).error))
-      }
+      await whatsApi.del({
+        company_id: companyId.value,
+        chat,
+        messageId: idMensagem,
+      })
       const { error: updErr } = await supabase
         .from('whats_mensagens_conversa')
         .update({ deletada: true } as never)
@@ -748,37 +718,15 @@ export function useChats() {
     messages.value = [...(messages.value ?? []), optimistic]
 
     try {
-      const { data: fnData, error } = await supabase.functions.invoke(
-        'send_whatsapp_message',
-        {
-          method: 'POST',
-          body: {
-            company_id: companyId.value,
-            number,
-            text: finalText,
-            ...(quotedMessageId
-              ? { quoted_message_id: quotedMessageId, quoted_chat: c.remoteJid ?? undefined }
-              : {}),
-          },
-        },
-      )
-      if (error) {
-        let detail = error.message
-        try {
-          const ctx = (error as { context?: Response }).context
-          if (ctx && typeof ctx.text === 'function') {
-            const body = await ctx.text()
-            if (body) detail = body
-          }
-        } catch {}
-        throw new Error(detail)
-      }
-      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
-        throw new Error(String((fnData as { error: unknown }).error))
-      }
-
-      const messageId =
-        (fnData as { _messageId?: string | null } | null)?._messageId ?? null
+      const fnData = await whatsApi.sendText({
+        company_id: companyId.value,
+        number,
+        text: finalText,
+        ...(quotedMessageId
+          ? { quoted_message_id: quotedMessageId, ...(c.remoteJid ? { quoted_chat: c.remoteJid } : {}) }
+          : {}),
+      })
+      const messageId = fnData?._messageId ?? null
 
       const row = {
         whats_conversa_id: c.id,
@@ -866,6 +814,60 @@ export function useChats() {
     }
   }
 
+  async function sendRichDispatch(
+    company_id: string,
+    number: string,
+    p: RichPayload,
+  ): Promise<{ _messageId: string | null } | null> {
+    switch (p.type) {
+      case 'media':
+        if (!p.url) throw new Error('URL da mídia ausente.')
+        return whatsApi.sendMedia({
+          company_id,
+          number,
+          url: p.url,
+          ...(p.caption ? { caption: p.caption } : {}),
+          ...(p.filename ? { filename: p.filename } : {}),
+          ...(p.mimetype ? { mimetype: p.mimetype } : {}),
+          ...(p.mediaType ? { mediaType: p.mediaType as 'image' | 'video' | 'audio' | 'document' } : {}),
+        })
+      case 'link':
+        if (!p.url) throw new Error('URL do link ausente.')
+        return whatsApi.sendLink({
+          company_id,
+          number,
+          url: p.url,
+          ...(p.text ? { text: p.text } : {}),
+          ...(p.title ? { title: p.title } : {}),
+          ...(p.description ? { description: p.description } : {}),
+        })
+      case 'location':
+        if (typeof p.latitude !== 'number' || typeof p.longitude !== 'number') {
+          throw new Error('Latitude/longitude ausentes.')
+        }
+        return whatsApi.sendLocation({
+          company_id,
+          number,
+          latitude: p.latitude,
+          longitude: p.longitude,
+          ...(p.name ? { name: p.name } : {}),
+        })
+      case 'contact':
+        if (!p.contacts?.length) throw new Error('Contatos ausentes.')
+        return whatsApi.sendContact({ company_id, number, contacts: p.contacts })
+      case 'poll':
+        if (!p.name || !p.options?.length) throw new Error('Enquete inválida.')
+        return whatsApi.sendPoll({
+          company_id,
+          number,
+          name: p.name,
+          options: p.options,
+        })
+      default:
+        throw new Error(`Tipo rich não suportado: ${p.type}`)
+    }
+  }
+
   async function sendRich(payload: RichPayload) {
     const c = selectedConversation.value
     if (!c || !companyId.value) throw new Error('Sem conversa selecionada.')
@@ -891,30 +893,8 @@ export function useChats() {
     messages.value = [...(messages.value ?? []), optimistic]
 
     try {
-      const { data: fnData, error } = await supabase.functions.invoke(
-        'send_whatsapp_rich',
-        {
-          method: 'POST',
-          body: { company_id: companyId.value, number, ...payload },
-        },
-      )
-      if (error) {
-        let detail = error.message
-        try {
-          const ctx = (error as { context?: Response }).context
-          if (ctx && typeof ctx.text === 'function') {
-            const body = await ctx.text()
-            if (body) detail = body
-          }
-        } catch {}
-        throw new Error(detail)
-      }
-      if (fnData && typeof fnData === 'object' && 'error' in fnData) {
-        throw new Error(String((fnData as { error: unknown }).error))
-      }
-
-      const messageId =
-        (fnData as { _messageId?: string | null } | null)?._messageId ?? null
+      const fnData = await sendRichDispatch(companyId.value, number, payload)
+      const messageId = fnData?._messageId ?? null
 
       const row = {
         whats_conversa_id: c.id,
@@ -1053,8 +1033,7 @@ export function useChats() {
     try {
       const { data } = await supabase.auth.getSession()
       const token = data.session?.access_token ?? null
-      // @ts-expect-error runtime method
-      supabase.realtime.setAuth(token)
+      ;(supabase.realtime as { setAuth: (t: string | null) => void }).setAuth(token)
     } catch {}
   }
 

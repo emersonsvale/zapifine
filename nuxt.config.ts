@@ -53,6 +53,7 @@ export default defineNuxtConfig({
       metaAppId: process.env.META_APP_ID ?? '',
       metaConfigId: process.env.META_CONFIG_ID ?? '',
       metaGraphVersion: process.env.META_GRAPH_VERSION ?? 'v20.0',
+      whatsApiUrl: process.env.WHATS_API_URL ?? 'https://whats.zapifine.com',
     },
   },
 
