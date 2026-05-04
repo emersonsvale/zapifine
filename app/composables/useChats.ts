@@ -198,15 +198,19 @@ export function useChats() {
     return (data ?? []).slice().reverse()
   }
 
+  let loadInitialToken = 0
   async function loadInitialMessages(conversaId: number) {
+    const token = ++loadInitialToken
+    messages.value = []
     msgsPending.value = true
     msgsHasMore.value = false
     try {
       const page = await fetchMessagesPage(conversaId, null, MSGS_PAGE_SIZE)
+      if (token !== loadInitialToken || selectedId.value !== conversaId) return
       messages.value = page
       msgsHasMore.value = page.length === MSGS_PAGE_SIZE
     } finally {
-      msgsPending.value = false
+      if (token === loadInitialToken) msgsPending.value = false
     }
   }
 
@@ -1076,6 +1080,7 @@ export function useChats() {
               filter: `whats_conversa_id=eq.${id}`,
             },
             (payload) => {
+              if (selectedId.value !== id) return
               const row = payload.new as Message
               const list = messages.value ?? []
               if (list.find((m) => m.id === row.id)) return
@@ -1109,6 +1114,7 @@ export function useChats() {
               filter: `whats_conversa_id=eq.${id}`,
             },
             (payload) => {
+              if (selectedId.value !== id) return
               const row = payload.new as Message
               const list = messages.value ?? []
               const idx = list.findIndex((m) => m.id === row.id)
