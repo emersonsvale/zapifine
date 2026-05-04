@@ -21,8 +21,9 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 function buildWebhookUrl(base: string): string {
   if (!WHATS_API_WEBHOOK_SECRET) return base;
-  const sep = base.includes("?") ? "&" : "?";
-  return `${base}${sep}secret=${encodeURIComponent(WHATS_API_WEBHOOK_SECRET)}`;
+  // Evolution Go strippa query string ao salvar webhook — usar path segment.
+  const cleanBase = base.replace(/\/+$/, "");
+  return `${cleanBase}/${encodeURIComponent(WHATS_API_WEBHOOK_SECRET)}`;
 }
 
 function randomToken(bytes = 24) {
