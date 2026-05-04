@@ -113,6 +113,59 @@ async function deleteGoInstanceByName(name: string) {
   return { ...parsed, usedId: id };
 }
 
+async function persistWebhook(
+  instance: string,
+  apikey: string,
+  url: string,
+  subscribe: string[],
+) {
+  // Evolution Go nao persiste webhook via /instance/connect — precisa de
+  // endpoint dedicado. Tentamos variantes conhecidas ate uma aceitar.
+  const evolutionEvents = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CHATS_UPSERT", "PRESENCE_UPDATE"];
+  const attempts: Array<{ method: "POST" | "PUT"; path: string; body: unknown }> = [
+    {
+      method: "POST",
+      path: `/webhook/set/${instance}`,
+      body: {
+        webhook: {
+          enabled: true,
+          url,
+          byEvents: false,
+          base64: true,
+          events: evolutionEvents,
+        },
+      },
+    },
+    {
+      method: "POST",
+      path: `/webhook/set/${instance}`,
+      body: { url, webhookUrl: url, enabled: true, subscribe, events: subscribe },
+    },
+    {
+      method: "PUT",
+      path: `/webhook/${instance}`,
+      body: { url, subscribe },
+    },
+    {
+      method: "POST",
+      path: `/instance/${instance}/webhook`,
+      body: { url, subscribe },
+    },
+  ];
+  const tried: Array<Record<string, unknown>> = [];
+  for (const a of attempts) {
+    const res = await fetch(`${EVOGO_BASE_URL}${a.path}`, {
+      method: a.method,
+      headers: { "Content-Type": "application/json", apikey },
+      body: JSON.stringify(a.body),
+    }).catch(() => null);
+    const parsed = await safeJson(res);
+    tried.push({ method: a.method, path: a.path, ...parsed });
+    if (parsed.ok) return { ok: true, used: { method: a.method, path: a.path }, tried };
+  }
+  return { ok: false, tried };
+}
+
 serve(async (req) => {
   try {
     if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -185,6 +238,9 @@ serve(async (req) => {
       body: JSON.stringify(connectPayload),
     });
     debug.connect = await safeJson(connectRes);
+
+    // STEP 2.5: persiste webhook (endpoint dedicado, /instance/connect nao salva)
+    debug.webhook = await persistWebhook(name, token, webhookUrl, subscribe);
 
     // STEP 3: poll QR
     let qrBase64: string | null = pickQr((debug.connect as any)?.json);
