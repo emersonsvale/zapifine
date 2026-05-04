@@ -15,6 +15,13 @@ const EVOGO_ADMIN_TOKEN =
 const WHATS_API_WEBHOOK_URL =
   Deno.env.get("WHATS_API_WEBHOOK_URL") ??
   "https://whats.zapifine.com/webhook/evolution";
+const WHATS_API_WEBHOOK_SECRET = Deno.env.get("WHATS_API_WEBHOOK_SECRET") ?? "";
+
+function buildWebhookUrl(base: string): string {
+  if (!WHATS_API_WEBHOOK_SECRET) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}secret=${encodeURIComponent(WHATS_API_WEBHOOK_SECRET)}`;
+}
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -145,7 +152,7 @@ serve(async (req) => {
       debug.cleanupGoOld = await deleteGoInstanceByName(existing.instance_name);
     }
 
-    const webhookUrl = webhook.url ?? WHATS_API_WEBHOOK_URL;
+    const webhookUrl = buildWebhookUrl(webhook.url ?? WHATS_API_WEBHOOK_URL);
 
     // STEP 1: criar instância Go
     const createRes = await fetch(`${EVOGO_BASE_URL}/instance/create`, {
