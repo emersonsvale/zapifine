@@ -120,40 +120,29 @@ async function persistWebhook(
   url: string,
   subscribe: string[],
 ) {
-  // Evolution Go nao persiste webhook via /instance/connect — precisa de
-  // endpoint dedicado. Tentamos variantes conhecidas ate uma aceitar.
-  const evolutionEvents = ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CHATS_UPSERT", "PRESENCE_UPDATE"];
-  const attempts: Array<{ method: "POST" | "PUT"; path: string; body: unknown }> = [
-    {
-      method: "POST",
-      path: `/webhook/set/${instance}`,
-      body: {
-        webhook: {
-          enabled: true,
-          url,
-          byEvents: false,
-          base64: true,
-          events: evolutionEvents,
-        },
-      },
-    },
-    {
-      method: "POST",
-      path: `/webhook/set/${instance}`,
-      body: { url, webhookUrl: url, enabled: true, subscribe, events: subscribe },
-    },
-    {
-      method: "PUT",
-      path: `/webhook/${instance}`,
-      body: { url, subscribe },
-    },
-    {
-      method: "POST",
-      path: `/instance/${instance}/webhook`,
-      body: { url, subscribe },
-    },
-  ];
+  // Evo Go usa UUID interno pra subscriptions. Resolver UUID e tentar variantes.
+  const instanceId = await findGoInstanceIdByName(instance);
+  const idents = instanceId ? [instanceId, instance] : [instance];
+
+  const attempts: Array<{ method: "POST" | "PUT"; path: string; body: unknown }> = [];
+  for (const ident of idents) {
+    attempts.push(
+      // Evo Go (whatsmeow) — endpoint mais provavel: subscriptions array por nome de evento
+      { method: "POST", path: `/webhook/${ident}`, body: { url, subscriptions: subscribe, enabled: true } },
+      { method: "PUT", path: `/webhook/${ident}`, body: { url, subscriptions: subscribe, enabled: true } },
+      { method: "POST", path: `/webhook/set/${ident}`, body: { url, subscriptions: subscribe, enabled: true } },
+      { method: "POST", path: `/webhook/set/${ident}`, body: { webhook: { url, subscriptions: subscribe, enabled: true } } },
+      // Subscription endpoint dedicado (variantes Go forks)
+      { method: "POST", path: `/subscribe/${ident}`, body: { events: subscribe } },
+      { method: "POST", path: `/instance/subscribe/${ident}`, body: { events: subscribe } },
+      { method: "POST", path: `/instance/${ident}/subscribe`, body: { events: subscribe } },
+      // Evolution Node-style (fallback)
+      { method: "POST", path: `/webhook/set/${ident}`, body: { webhook: { enabled: true, url, byEvents: false, base64: true, events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CHATS_UPSERT", "PRESENCE_UPDATE"] } } },
+    );
+  }
+
   const tried: Array<Record<string, unknown>> = [];
+  let success: { method: string; path: string } | null = null;
   for (const a of attempts) {
     const res = await fetch(`${EVOGO_BASE_URL}${a.path}`, {
       method: a.method,
@@ -161,10 +150,10 @@ async function persistWebhook(
       body: JSON.stringify(a.body),
     }).catch(() => null);
     const parsed = await safeJson(res);
-    tried.push({ method: a.method, path: a.path, ...parsed });
-    if (parsed.ok) return { ok: true, used: { method: a.method, path: a.path }, tried };
+    tried.push({ method: a.method, path: a.path, body: a.body, ...parsed });
+    if (parsed.ok && !success) success = { method: a.method, path: a.path };
   }
-  return { ok: false, tried };
+  return { ok: !!success, used: success, tried, instanceId };
 }
 
 serve(async (req) => {
