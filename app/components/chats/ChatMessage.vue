@@ -165,7 +165,9 @@ const ackLevel = computed<'sent' | 'delivered' | 'read' | null>(() => {
   if (s === 'Enviada') return 'sent'
   return null
 })
-const groupSender = computed(() => {
+const { nameFor: participantNameFor, avatarFor: participantAvatarFor } = useParticipants()
+
+const groupSenderJid = computed(() => {
   const m = props.message as unknown as {
     ingrupo?: boolean | null
     quemmandou?: string | null
@@ -173,10 +175,19 @@ const groupSender = computed(() => {
   if (isSent.value) return null
   if (!m.ingrupo) return null
   const raw = m.quemmandou?.trim()
-  if (!raw) return null
-  const beforeAt = raw.split('@')[0] ?? raw
-  const digits = beforeAt.replace(/\D/g, '')
-  return digits || beforeAt || null
+  return raw || null
+})
+
+const groupSender = computed(() => {
+  const jid = groupSenderJid.value
+  if (!jid) return null
+  return participantNameFor(jid) || null
+})
+
+const groupSenderAvatar = computed(() => {
+  const jid = groupSenderJid.value
+  if (!jid) return null
+  return participantAvatarFor(jid)
 })
 
 const currentReaction = computed(
@@ -342,12 +353,16 @@ const formattedMessage = computed(() =>
           : 'bg-card border'
       "
     >
-      <p
+      <div
         v-if="groupSender"
-        class="mb-1 text-xs font-semibold text-sky-500"
+        class="mb-1 flex items-center gap-1.5"
       >
-        {{ groupSender }}
-      </p>
+        <Avatar v-if="groupSenderAvatar" class="h-5 w-5">
+          <AvatarImage :src="groupSenderAvatar" :alt="groupSender" />
+          <AvatarFallback class="text-[10px]">{{ groupSender[0]?.toUpperCase() ?? '?' }}</AvatarFallback>
+        </Avatar>
+        <p class="text-xs font-semibold text-sky-500">{{ groupSender }}</p>
+      </div>
       <div
         v-if="message.quoted_message_id && quotedLookup"
         class="mb-1.5 rounded border-l-4 px-2 py-1 text-xs"

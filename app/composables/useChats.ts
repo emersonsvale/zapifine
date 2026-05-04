@@ -25,6 +25,7 @@ type Conversation = {
   unread_count: number
   isgrupo: boolean
   grupoNome: string | null
+  avatar_url: string | null
   assigned_to: string | null
   assigned_nome: string | null
   setor_id: string | null
@@ -121,16 +122,20 @@ export function useChats() {
       }>
 
       const ids = rows.map((r) => r.id)
-      const groupMap = new Map<number, { isgrupo: boolean; grupoNome: string | null }>()
+      const groupMap = new Map<
+        number,
+        { isgrupo: boolean; grupoNome: string | null; avatar_url: string | null }
+      >()
       if (ids.length > 0) {
         const { data: gRows } = await supabase
           .from('whats_conversa')
-          .select('id, isgrupo, "grupoNome"' as never)
+          .select('id, isgrupo, "grupoNome", avatar_url' as never)
           .in('id', ids)
         for (const g of (gRows ?? []) as any[]) {
           groupMap.set(g.id, {
             isgrupo: Boolean(g.isgrupo),
             grupoNome: g.grupoNome ?? null,
+            avatar_url: g.avatar_url ?? null,
           })
         }
       }
@@ -159,6 +164,7 @@ export function useChats() {
         unread_count: Number(r.unread_count ?? 0),
         isgrupo: groupMap.get(r.id)?.isgrupo ?? false,
         grupoNome: groupMap.get(r.id)?.grupoNome ?? null,
+        avatar_url: groupMap.get(r.id)?.avatar_url ?? null,
         assigned_to: r.assigned_to ?? null,
         assigned_nome: r.assigned_nome ?? null,
         setor_id: r.setor_id ?? null,
@@ -1025,6 +1031,12 @@ export function useChats() {
     if (nextAssigned !== prev.assigned_to || nextSetor !== prev.setor_id) {
       // Atribuição/setor mudou — refetch pra trazer assigned_nome / setor_nome / setor_cor.
       refreshConversations()
+    }
+    const nextAvatar = (row.avatar_url as string | null | undefined) ?? null
+    if (nextAvatar !== prev.avatar_url) {
+      const next = list.slice()
+      next[idx] = { ...prev, avatar_url: nextAvatar }
+      conversations.value = next
     }
   }
 

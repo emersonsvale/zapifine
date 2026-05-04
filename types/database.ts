@@ -1967,6 +1967,8 @@ export type Database = {
         Row: {
           assigned_at: string | null
           assigned_to: string | null
+          avatar_fetched_at: string | null
+          avatar_url: string | null
           companies_id: string | null
           created_at: string
           grupoNome: string | null
@@ -1981,6 +1983,8 @@ export type Database = {
         Insert: {
           assigned_at?: string | null
           assigned_to?: string | null
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
           companies_id?: string | null
           created_at?: string
           grupoNome?: string | null
@@ -1995,6 +1999,8 @@ export type Database = {
         Update: {
           assigned_at?: string | null
           assigned_to?: string | null
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
           companies_id?: string | null
           created_at?: string
           grupoNome?: string | null
@@ -2055,6 +2061,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_user_dashboard"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      whats_participantes: {
+        Row: {
+          avatar_fetched_at: string | null
+          avatar_url: string | null
+          companies_id: string
+          jid: string
+          nome: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
+          companies_id: string
+          jid: string
+          nome?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
+          companies_id?: string
+          jid?: string
+          nome?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whats_participantes_companies_id_fkey"
+            columns: ["companies_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }

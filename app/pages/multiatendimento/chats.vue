@@ -538,8 +538,8 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         <div class="flex shrink-0 items-center gap-3 border-b bg-background px-4 py-3">
           <Avatar class="h-10 w-10">
             <AvatarImage
-              v-if="selectedConversation?.leads?.avatar_url"
-              :src="selectedConversation.leads.avatar_url"
+              v-if="selectedConversation?.avatar_url || selectedConversation?.leads?.avatar_url"
+              :src="(selectedConversation.avatar_url || selectedConversation.leads?.avatar_url) as string"
               :alt="headerName"
             />
             <AvatarFallback

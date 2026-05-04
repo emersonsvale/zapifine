@@ -19,6 +19,7 @@ type Conv = {
   unread_count: number
   isgrupo?: boolean
   grupoNome?: string | null
+  avatar_url?: string | null
   assigned_to?: string | null
   assigned_nome?: string | null
   setor_id?: string | null
@@ -220,9 +221,9 @@ function previewText(c: Conv) {
           >
             <Avatar class="h-11 w-11 shrink-0">
               <AvatarImage
-                v-if="c.leads?.avatar_url"
-                :src="c.leads.avatar_url"
-                :alt="c.leads?.nome_lead ?? ''"
+                v-if="c.avatar_url || c.leads?.avatar_url"
+                :src="(c.avatar_url || c.leads?.avatar_url) as string"
+                :alt="(c.isgrupo ? c.grupoNome : c.leads?.nome_lead) ?? ''"
               />
               <AvatarFallback
                 class="text-sm font-medium"
