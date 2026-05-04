@@ -107,44 +107,6 @@ async function deleteGoInstanceByName(name: string) {
   return { ...parsed, usedId: id };
 }
 
-async function persistWebhook(
-  instance: string,
-  apikey: string,
-  url: string,
-  subscribe: string[],
-) {
-  const instanceId = await findGoInstanceIdByName(instance);
-  const idents = instanceId ? [instanceId, instance] : [instance];
-
-  const attempts: Array<{ method: "POST" | "PUT"; path: string; body: unknown }> = [];
-  for (const ident of idents) {
-    attempts.push(
-      { method: "POST", path: `/webhook/${ident}`, body: { url, subscriptions: subscribe, enabled: true } },
-      { method: "PUT", path: `/webhook/${ident}`, body: { url, subscriptions: subscribe, enabled: true } },
-      { method: "POST", path: `/webhook/set/${ident}`, body: { url, subscriptions: subscribe, enabled: true } },
-      { method: "POST", path: `/webhook/set/${ident}`, body: { webhook: { url, subscriptions: subscribe, enabled: true } } },
-      { method: "POST", path: `/subscribe/${ident}`, body: { events: subscribe } },
-      { method: "POST", path: `/instance/subscribe/${ident}`, body: { events: subscribe } },
-      { method: "POST", path: `/instance/${ident}/subscribe`, body: { events: subscribe } },
-      { method: "POST", path: `/webhook/set/${ident}`, body: { webhook: { enabled: true, url, byEvents: false, base64: true, events: ["MESSAGES_UPSERT", "MESSAGES_UPDATE", "CHATS_UPSERT", "PRESENCE_UPDATE"] } } },
-    );
-  }
-
-  const tried: Array<Record<string, unknown>> = [];
-  let success: { method: string; path: string } | null = null;
-  for (const a of attempts) {
-    const res = await fetch(`${EVOGO_BASE_URL}${a.path}`, {
-      method: a.method,
-      headers: { "Content-Type": "application/json", apikey },
-      body: JSON.stringify(a.body),
-    }).catch(() => null);
-    const parsed = await safeJson(res);
-    tried.push({ method: a.method, path: a.path, body: a.body, ...parsed });
-    if (parsed.ok && !success) success = { method: a.method, path: a.path };
-  }
-  return { ok: !!success, used: success, tried, instanceId };
-}
-
 serve(async (req) => {
   try {
     if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -168,7 +130,8 @@ serve(async (req) => {
     if (!row) return cors({ error: "Conexão não encontrada no DB" }, 404);
 
     const debug: Record<string, unknown> = {};
-    const subscribe = ["Message", "ReadReceipt", "ChatPresence"];
+    // Evolution Go evento types: UPPERCASE (vide pkg/internal/event_types/event_types.go)
+    const subscribe = ["MESSAGE", "READ_RECEIPT", "CHAT_PRESENCE"];
     const webhookUrl = buildWebhookUrl(WHATS_API_WEBHOOK_URL);
 
     // STEP 0: cleanup Go (reset sessao caso ja exista)
@@ -203,9 +166,6 @@ serve(async (req) => {
       }),
     });
     debug.connect = await safeJson(connectRes);
-
-    // STEP 2.5: persiste webhook em endpoint dedicado
-    debug.webhook = await persistWebhook(instance, token, webhookUrl, subscribe);
 
     // STEP 3: poll QR
     let qrBase64: string | null = pickQr((debug.connect as any)?.json);
