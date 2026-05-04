@@ -14,18 +14,25 @@ const { toast } = useAlerts()
 
 const MAX_AUDIO_BYTES = 8 * 1024 * 1024
 const MAX_DURATION_MS = 5 * 60 * 1000
+const AUDIO_MIME = 'audio/ogg'
 
 type State = 'idle' | 'recording' | 'review' | 'sending'
 const state = ref<State>('idle')
 
-const recorder = ref<MediaRecorder | null>(null)
-const chunks = ref<Blob[]>([])
+type OpusRec = {
+  start: () => Promise<void>
+  stop: () => Promise<void> | void
+  close: () => void
+  ondataavailable: ((buf: Uint8Array | ArrayBuffer) => void) | null
+  onstop: (() => void) | null
+}
+
+const recorder = ref<OpusRec | null>(null)
 const blob = ref<Blob | null>(null)
 const previewUrl = ref<string | null>(null)
 const startedAt = ref<number>(0)
 const elapsedMs = ref<number>(0)
 let tickTimer: ReturnType<typeof setInterval> | null = null
-let stream: MediaStream | null = null
 
 const elapsedLabel = computed(() => {
   const ms = elapsedMs.value
@@ -35,19 +42,6 @@ const elapsedLabel = computed(() => {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 })
 
-function pickMime(): string {
-  const candidates = [
-    'audio/ogg;codecs=opus',
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/mp4',
-  ]
-  for (const c of candidates) {
-    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(c)) return c
-  }
-  return ''
-}
-
 function clearTimers() {
   if (tickTimer) {
     clearInterval(tickTimer)
@@ -55,18 +49,12 @@ function clearTimers() {
   }
 }
 
-function stopStream() {
-  if (stream) {
-    stream.getTracks().forEach((t) => t.stop())
-    stream = null
-  }
-}
-
 function resetAll() {
   clearTimers()
-  stopStream()
-  recorder.value = null
-  chunks.value = []
+  if (recorder.value) {
+    try { recorder.value.close() } catch { /* noop */ }
+    recorder.value = null
+  }
   blob.value = null
   if (previewUrl.value) {
     URL.revokeObjectURL(previewUrl.value)
@@ -79,42 +67,59 @@ function resetAll() {
 async function startRecording() {
   if (state.value !== 'idle') return
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    // @ts-expect-error opus-recorder ships no types
+    const mod = await import('opus-recorder')
+    const Recorder = (mod as {
+      default: (new (cfg: Record<string, unknown>) => OpusRec) & {
+        isRecordingSupported: () => boolean
+      }
+    }).default
+    if (!Recorder.isRecordingSupported()) {
+      toast.error('Navegador não suporta gravação Opus.')
+      return
+    }
+    const rec = new Recorder({
+      encoderPath: '/encoderWorker.min.js',
+      encoderApplication: 2048,
+      encoderFrameSize: 20,
+      encoderSampleRate: 48000,
+      numberOfChannels: 1,
+      streamPages: false,
+    })
+    rec.ondataavailable = (buf) => {
+      const u8 = buf instanceof Uint8Array ? new Uint8Array(buf) : new Uint8Array(buf as ArrayBuffer)
+      const b = new Blob([u8], { type: AUDIO_MIME })
+      blob.value = b
+      if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
+      previewUrl.value = URL.createObjectURL(b)
+    }
+    rec.onstop = () => {
+      clearTimers()
+      state.value = 'review'
+    }
+    await rec.start()
+    recorder.value = rec
+    startedAt.value = Date.now()
+    elapsedMs.value = 0
+    state.value = 'recording'
+    tickTimer = setInterval(() => {
+      elapsedMs.value = Date.now() - startedAt.value
+      if (elapsedMs.value >= MAX_DURATION_MS) stopRecording()
+    }, 250)
   } catch (err) {
-    toast.error(err instanceof Error ? err.message : 'Permita acesso ao microfone.')
-    return
+    toast.error(err instanceof Error ? err.message : 'Falha ao iniciar gravação.')
+    resetAll()
   }
-  const mime = pickMime()
-  const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
-  recorder.value = rec
-  chunks.value = []
-  rec.ondataavailable = (e) => {
-    if (e.data && e.data.size > 0) chunks.value.push(e.data)
-  }
-  rec.onstop = () => {
-    const finalMime = rec.mimeType || 'audio/webm'
-    const b = new Blob(chunks.value, { type: finalMime })
-    blob.value = b
-    if (previewUrl.value) URL.revokeObjectURL(previewUrl.value)
-    previewUrl.value = URL.createObjectURL(b)
-    stopStream()
-    clearTimers()
-    state.value = 'review'
-  }
-  rec.start()
-  startedAt.value = Date.now()
-  elapsedMs.value = 0
-  state.value = 'recording'
-  tickTimer = setInterval(() => {
-    elapsedMs.value = Date.now() - startedAt.value
-    if (elapsedMs.value >= MAX_DURATION_MS) stopRecording()
-  }, 250)
 }
 
 function stopRecording() {
   const rec = recorder.value
   if (!rec) return
-  if (rec.state !== 'inactive') rec.stop()
+  try {
+    void rec.stop()
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao parar gravação.')
+  }
 }
 
 function discard() {
@@ -130,20 +135,14 @@ async function send() {
   }
   state.value = 'sending'
   try {
-    const mime = b.type || 'audio/webm'
-    const ext = mime.includes('ogg')
-      ? 'ogg'
-      : mime.includes('mp4')
-        ? 'm4a'
-        : 'webm'
     const companyFolder = (authUser.value?.user_metadata as { companie_id?: string })?.companie_id ?? 'shared'
-    const path = `${companyFolder}/audio-${crypto.randomUUID()}.${ext}`
+    const path = `${companyFolder}/audio-${crypto.randomUUID()}.ogg`
     const { error: upErr } = await supabase.storage
       .from('chat-media')
       .upload(path, b, {
         cacheControl: '3600',
         upsert: false,
-        contentType: mime,
+        contentType: AUDIO_MIME,
       })
     if (upErr) throw upErr
     const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(path)
@@ -155,8 +154,8 @@ async function send() {
       type: 'media',
       url,
       mediaType: 'audio',
-      mimetype: mime,
-      filename: `audio.${ext}`,
+      mimetype: AUDIO_MIME,
+      filename: 'audio.ogg',
     } as never)
     emit('sent')
     resetAll()
