@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import {
   Send,
   Paperclip,
@@ -341,6 +341,7 @@ function cancelReply() {
 
 watch(selectedId, () => {
   replyingTo.value = null
+  nextTick(autoResizeInput)
 })
 
 const replyPreview = computed(() => {
@@ -368,6 +369,23 @@ const messagesByWaId = computed(() => {
   }
   return map
 })
+
+function autoResizeInput() {
+  const el = inputEl.value
+  if (!el) return
+  el.style.height = 'auto'
+  const cs = getComputedStyle(el)
+  const lineHeight = parseFloat(cs.lineHeight) || 20
+  const paddingY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+  const borderY = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth)
+  const maxH = lineHeight * 8 + paddingY + borderY
+  const newH = Math.min(el.scrollHeight + borderY, maxH)
+  el.style.height = newH + 'px'
+  el.style.overflowY = el.scrollHeight + borderY > maxH ? 'auto' : 'hidden'
+}
+
+watch(input, () => nextTick(autoResizeInput))
+onMounted(() => autoResizeInput())
 
 function insertEmoji(emoji: string) {
   const el = inputEl.value
@@ -837,7 +855,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               v-model="input"
               rows="1"
               :placeholder="inputMode === 'note' ? 'Nota interna (só equipe vê)' : 'Digite uma mensagem'"
-              class="max-h-40 min-h-[40px] flex-1 resize-none rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              class="min-h-[40px] flex-1 resize-none overflow-hidden rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               :class="inputMode === 'note' ? 'border-amber-400' : ''"
               @keydown="handleKeydown"
             />
