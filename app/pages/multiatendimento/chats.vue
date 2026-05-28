@@ -24,6 +24,7 @@ import {
   Link2,
   X,
   ArrowRightLeft,
+  ChevronDown,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -155,10 +156,21 @@ async function onAssignRelease() {
 }
 
 const messagesScrollEl = ref<HTMLDivElement | null>(null)
+const isNearBottom = ref(true)
+const newMessagesCount = ref(0)
+
+function updateNearBottom() {
+  const el = messagesScrollEl.value
+  if (!el) return
+  // flex-col-reverse: scrollTop=0 = fundo visual (mensagens recentes)
+  isNearBottom.value = el.scrollTop < 80
+  if (isNearBottom.value) newMessagesCount.value = 0
+}
 
 function onMessagesScroll() {
   const el = messagesScrollEl.value
   if (!el) return
+  updateNearBottom()
   if (!msgsHasMore.value || msgsLoadingOlder.value) return
   // flex-col-reverse: scroll visual pra cima = scrollTop cresce.
   const threshold = 200
@@ -166,6 +178,31 @@ function onMessagesScroll() {
     loadOlderMessages()
   }
 }
+
+function scrollToLatest() {
+  const el = messagesScrollEl.value
+  if (!el) return
+  el.scrollTo({ top: 0, behavior: 'smooth' })
+  newMessagesCount.value = 0
+}
+
+watch(
+  () => messages.value?.length ?? 0,
+  (len, prev) => {
+    if (len > (prev ?? 0) && !isNearBottom.value) {
+      newMessagesCount.value += len - (prev ?? 0)
+    }
+  },
+)
+
+watch(selectedId, () => {
+  newMessagesCount.value = 0
+  isNearBottom.value = true
+})
+
+const showJumpButton = computed(
+  () => !isNearBottom.value || newMessagesCount.value > 0,
+)
 
 const presenceLabel = computed(() => {
   if (presenceState.value !== 'composing') return ''
@@ -852,8 +889,8 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         >
           Nenhuma mensagem ainda. Envie a primeira!
         </p>
+        <div v-else class="relative flex min-h-0 flex-1 flex-col">
         <div
-          v-else
           ref="messagesScrollEl"
           class="flex min-h-0 flex-1 flex-col-reverse space-y-2 space-y-reverse overflow-y-auto px-4 py-4"
           @scroll.passive="onMessagesScroll"
@@ -892,6 +929,22 @@ const groupedMessages = computed<GroupedItem[]>(() => {
           >
             início da conversa
           </div>
+        </div>
+        <button
+          v-if="showJumpButton"
+          type="button"
+          class="absolute bottom-4 right-4 z-10 flex h-10 items-center gap-1.5 rounded-full bg-emerald-600 px-3 text-white shadow-lg transition hover:bg-emerald-500"
+          title="Ir para mensagens mais recentes"
+          @click="scrollToLatest"
+        >
+          <ChevronDown class="h-5 w-5" />
+          <span
+            v-if="newMessagesCount > 0"
+            class="rounded-full bg-white/25 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
+          >
+            {{ newMessagesCount > 99 ? '99+' : newMessagesCount }}
+          </span>
+        </button>
         </div>
 
         <p
