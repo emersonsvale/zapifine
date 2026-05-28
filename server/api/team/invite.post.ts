@@ -1,6 +1,6 @@
-import { createClient } from '@supabase/supabase-js'
 import { serverSupabaseClient, serverSupabaseUser } from '#supabase/server'
 import type { Database } from '~~/types/database'
+import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 
 type Body = {
   email?: string
@@ -10,17 +10,6 @@ type Body = {
 }
 
 export default defineEventHandler(async (event) => {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  const supabaseUrl = process.env.SUPABASE_URL
-
-  if (!serviceKey || !supabaseUrl) {
-    throw createError({
-      statusCode: 500,
-      statusMessage:
-        'SUPABASE_SERVICE_ROLE_KEY ausente no .env. Convite indisponível.',
-    })
-  }
-
   const authUser = await serverSupabaseUser(event)
   if (!authUser?.id) {
     throw createError({ statusCode: 401, statusMessage: 'Não autenticado.' })
@@ -61,17 +50,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const admin = createClient<Database>(supabaseUrl, serviceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  })
-
-  const headers: Record<string, string> = {}
-  if (process.env.SUPABASE_GW_SECRET) {
-    headers['x-zapifine-gw'] = process.env.SUPABASE_GW_SECRET
-  }
-  if (process.env.NODE_ENV !== 'production') {
-    headers.origin = 'http://localhost:3000'
-  }
+  const admin = useSupabaseAdmin()
 
   const { data: invited, error: inviteErr } =
     await admin.auth.admin.inviteUserByEmail(email, {
