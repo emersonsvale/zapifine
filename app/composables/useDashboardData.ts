@@ -18,13 +18,6 @@ export type DashboardStats = {
   graficoConversao: { labels: string[]; valores: number[] }
 }
 
-export type DashboardActivity = {
-  id: number | string
-  name: string
-  description: string
-  time: string
-}
-
 export type RecentMessage = {
   id: number
   conversaId: number
@@ -35,10 +28,11 @@ export type RecentMessage = {
   isGroup: boolean
 }
 
-type DashboardEdgeResponse = {
+type DashboardRpcResponse = {
   total_mensagens?: number
   taxa_conversao?: number
   tempo_medio_resposta?: string
+  tempo_medio_resposta_seg?: number
   leads_gerados?: number
   status_desempenho?: {
     taxa_resposta?: number
@@ -47,16 +41,8 @@ type DashboardEdgeResponse = {
     taxa_conclusao?: number
   }
   percentuais_mensagens?: { semana_atual?: number; semana_passada?: number }
-  ultimas_atividades?: Array<{ nome_lead: string; resumo: string; hora: string }>
   grafico_mensagens?: { labels: string[]; valores: number[] }
   grafico_conversao?: { labels: string[]; valores: number[] }
-}
-
-function parseSegFromTempo(tempo: string | undefined): number | null {
-  if (!tempo) return null
-  const m = /(\d+)\s*s/i.exec(tempo)
-  if (!m) return null
-  return Number.parseInt(m[1] ?? '0', 10) || 0
 }
 
 export function useDashboardData() {
@@ -70,23 +56,18 @@ export function useDashboardData() {
     'dashboard-stats',
     async () => {
       if (!companyId.value) return null
-      const { data, error } = await supabase.functions.invoke<DashboardEdgeResponse>(
-        'dashboard',
-        {
-          method: 'POST',
-          body: { companies_id: companyId.value },
-        },
-      )
+      const { data, error } = await supabase.rpc('dashboard_stats' as never, {
+        p_company_id: companyId.value,
+      } as never)
       if (error) throw error
-      const d = data ?? {}
-      const tempo = parseSegFromTempo(d.tempo_medio_resposta)
+      const d = (data ?? {}) as DashboardRpcResponse
       return {
         totalMensagens: d.total_mensagens ?? 0,
         mensagensEstaSemana: d.percentuais_mensagens?.semana_atual ?? 0,
         mensagensSemanaPassada: d.percentuais_mensagens?.semana_passada ?? 0,
         totalLeads: 0,
         leadsUltimaSemana: d.leads_gerados ?? 0,
-        tempoMedioRespostaSeg: tempo,
+        tempoMedioRespostaSeg: d.tempo_medio_resposta_seg ?? null,
         taxaConversao: d.taxa_conversao ?? 0,
         statusDesempenho: {
           taxa_resposta: d.status_desempenho?.taxa_resposta ?? 0,
@@ -97,30 +78,6 @@ export function useDashboardData() {
         graficoMensagens: d.grafico_mensagens ?? { labels: [], valores: [] },
         graficoConversao: d.grafico_conversao ?? { labels: [], valores: [] },
       }
-    },
-    { watch: [companyId] },
-  )
-
-  const activities = useAsyncData<DashboardActivity[]>(
-    'dashboard-activities',
-    async () => {
-      if (!companyId.value) return []
-      const { data, error } = await supabase
-        .from('leads')
-        .select('id,nome_lead,resumo_lead,ultima_interacao_lead,created_at')
-        .eq('companies_id', companyId.value)
-        .order('ultima_interacao_lead', {
-          ascending: false,
-          nullsFirst: false,
-        })
-        .limit(5)
-      if (error) throw error
-      return (data ?? []).map<DashboardActivity>((l) => ({
-        id: l.id,
-        name: l.nome_lead?.trim() || 'Sem nome',
-        description: l.resumo_lead?.trim() || 'NA',
-        time: formatTime(l.ultima_interacao_lead ?? l.created_at),
-      }))
     },
     { watch: [companyId] },
   )
@@ -177,7 +134,7 @@ export function useDashboardData() {
     { watch: [companyId] },
   )
 
-  return { stats, activities, recentMessages, authUser, companyId }
+  return { stats, recentMessages, authUser, companyId }
 }
 
 function formatTime(iso: string | null) {
