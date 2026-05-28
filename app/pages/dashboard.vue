@@ -3,10 +3,10 @@ import { computed } from 'vue'
 
 useHead({ title: 'Dashboard - Zapifine' })
 
-const { stats: statsState, activities: activitiesState } = useDashboardData()
+const { stats: statsState, recentMessages: recentState } = useDashboardData()
 
 const { data: stats, pending: statsLoading, error: statsError } = statsState
-const { data: activities, pending: actLoading } = activitiesState
+const { data: recent, pending: actLoading } = recentState
 
 const cards = computed(() => {
   const s = stats.value
@@ -132,7 +132,7 @@ function pctFormatter(v: number) {
         <CardHeader>
           <CardTitle class="text-xl">Atividades Recentes</CardTitle>
           <CardDescription>
-            Visualize as conversas mais recentes
+            Últimas mensagens nas conversas — clique para abrir
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -144,18 +144,23 @@ function pctFormatter(v: number) {
               Carregando...
             </p>
             <p
-              v-else-if="!activities || activities.length === 0"
+              v-else-if="!recent || recent.length === 0"
               class="py-6 text-sm text-muted-foreground"
             >
-              Nenhuma atividade recente.
+              Nenhuma mensagem recente.
             </p>
-            <DashboardActivityItem
-              v-for="a in activities ?? []"
-              :key="a.id"
-              :name="a.name"
-              :description="a.description"
-              :time="a.time"
-            />
+            <NuxtLink
+              v-for="r in recent ?? []"
+              :key="r.id"
+              :to="`/multiatendimento/chats?conv=${r.conversaId}`"
+              class="block rounded-md transition hover:bg-accent/40"
+            >
+              <DashboardActivityItem
+                :name="r.name"
+                :description="r.snippet"
+                :time="r.time"
+              />
+            </NuxtLink>
           </div>
         </CardContent>
       </Card>

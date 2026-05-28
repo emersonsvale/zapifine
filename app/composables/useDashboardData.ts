@@ -25,6 +25,16 @@ export type DashboardActivity = {
   time: string
 }
 
+export type RecentMessage = {
+  id: number
+  conversaId: number
+  name: string
+  snippet: string
+  time: string
+  inbound: boolean
+  isGroup: boolean
+}
+
 type DashboardEdgeResponse = {
   total_mensagens?: number
   taxa_conversao?: number
@@ -115,7 +125,59 @@ export function useDashboardData() {
     { watch: [companyId] },
   )
 
-  return { stats, activities, authUser, companyId }
+  const recentMessages = useAsyncData<RecentMessage[]>(
+    'dashboard-recent-messages',
+    async () => {
+      if (!companyId.value) return []
+      const { data, error } = await supabase
+        .from('whats_mensagens_conversa')
+        .select(
+          'id, created_at, mensagem, tipo, status, whats_conversa_id, whats_conversa!inner(id, isgrupo, "grupoNome", "remoteJid", companies_id, leads(nome_lead, numero_whatsapp_lead))' as never,
+        )
+        .eq('whats_conversa.companies_id' as never, companyId.value)
+        .eq('interna' as never, false)
+        .neq('tipo' as never, 'evento')
+        .neq('deletada' as never, true)
+        .order('created_at', { ascending: false })
+        .limit(8)
+      if (error) throw error
+      return (data ?? []).map((r: any): RecentMessage => {
+        const conv = r.whats_conversa
+        const lead = conv?.leads
+        const isGroup = !!conv?.isgrupo
+        const name = isGroup
+          ? conv?.grupoNome?.trim() || 'Grupo'
+          : lead?.nome_lead?.trim() ||
+            lead?.numero_whatsapp_lead ||
+            conv?.remoteJid ||
+            'Sem nome'
+        const tipo = (r.tipo ?? '').toLowerCase()
+        const inbound = r.status === 'Recebida'
+        const raw = (r.mensagem ?? '').replace(/[*_~`]/g, '').trim()
+        let snippet = raw
+        if (!raw) {
+          if (['image', 'imagem', 'photo', 'picture', 'imagemessage'].includes(tipo)) snippet = '📷 Imagem'
+          else if (['audio', 'voice', 'ptt', 'audiomessage'].includes(tipo)) snippet = '🎤 Áudio'
+          else if (['video', 'videomessage'].includes(tipo)) snippet = '🎬 Vídeo'
+          else if (['document', 'file', 'pdf', 'documentmessage'].includes(tipo)) snippet = '📎 Documento'
+          else snippet = '—'
+        }
+        const prefix = inbound ? '' : 'Você: '
+        return {
+          id: r.id,
+          conversaId: r.whats_conversa_id,
+          name,
+          snippet: prefix + snippet.slice(0, 140),
+          time: formatTime(r.created_at),
+          inbound,
+          isGroup,
+        }
+      })
+    },
+    { watch: [companyId] },
+  )
+
+  return { stats, activities, recentMessages, authUser, companyId }
 }
 
 function formatTime(iso: string | null) {
