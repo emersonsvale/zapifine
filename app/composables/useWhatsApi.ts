@@ -16,6 +16,8 @@ type SendTextPayload = {
   delay?: number
   quoted_message_id?: string
   quoted_chat?: string
+  mentioned?: string[]
+  mentions_everyone?: boolean
 }
 
 type SendMediaPayload = {

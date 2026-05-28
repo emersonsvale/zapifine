@@ -12,13 +12,17 @@ import {
   Reply,
   StickyNote,
   ArrowRightLeft,
+  ZoomIn,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
 
 const props = defineProps<{ message: Message; quotedLookup?: Message | null }>()
-const emit = defineEmits<{ reply: [message: Message] }>()
+const emit = defineEmits<{
+  reply: [message: Message]
+  'mention-click': [payload: { jid: string; digits: string }]
+}>()
 
 const { reactMessage, editMessage, deleteMessage } = useChats()
 const { toast, confirm } = useAlerts()
@@ -165,7 +169,22 @@ const ackLevel = computed<'sent' | 'delivered' | 'read' | null>(() => {
   if (s === 'Enviada') return 'sent'
   return null
 })
-const { nameFor: participantNameFor, avatarFor: participantAvatarFor } = useParticipants()
+const {
+  nameFor: participantNameFor,
+  avatarFor: participantAvatarFor,
+  map: participantsMap,
+} = useParticipants()
+
+const JID_SUFFIXES = ['@s.whatsapp.net', '@c.us', '@lid', '@g.us']
+
+function resolveMention(digits: string): { name: string; jid: string } {
+  for (const sfx of JID_SUFFIXES) {
+    const jid = digits + sfx
+    const row = participantsMap.value[jid]
+    if (row?.nome?.trim()) return { name: row.nome.trim(), jid }
+  }
+  return { name: digits, jid: digits + '@s.whatsapp.net' }
+}
 
 const groupSenderJid = computed(() => {
   const m = props.message as unknown as {
@@ -241,16 +260,41 @@ function escapeHtml(s: string) {
     .replace(/'/g, '&#39;')
 }
 function renderWhatsappMarkup(raw: string) {
-  const escaped = escapeHtml(raw)
-  return escaped
+  let s = escapeHtml(raw)
+  s = s
     .replace(/\*([^*\n]+)\*/g, '<strong>$1</strong>')
     .replace(/_([^_\n]+)_/g, '<em>$1</em>')
     .replace(/~([^~\n]+)~/g, '<s>$1</s>')
     .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+  s = s.replace(/@(\d{5,})/g, (_m, digits: string) => {
+    const r = resolveMention(digits)
+    return `<span class="mention" data-mention-jid="${r.jid}" data-mention-digits="${digits}">@${escapeHtml(r.name)}</span>`
+  })
+  return s
+}
+
+function onMessageClick(e: MouseEvent) {
+  const target = e.target as HTMLElement | null
+  if (!target) return
+  const el = target.closest('[data-mention-jid]') as HTMLElement | null
+  if (!el) return
+  e.stopPropagation()
+  const jid = el.dataset.mentionJid ?? ''
+  const digits = el.dataset.mentionDigits ?? ''
+  if (jid) emit('mention-click', { jid, digits })
 }
 const formattedMessage = computed(() =>
   renderWhatsappMarkup(props.message.mensagem ?? ''),
 )
+
+const lightboxOpen = ref(false)
+const lightboxType = computed<'image' | 'video'>(() =>
+  isVideo.value ? 'video' : 'image',
+)
+function openLightbox() {
+  if (!props.message.midia_url) return
+  lightboxOpen.value = true
+}
 </script>
 
 <template>
@@ -387,25 +431,38 @@ const formattedMessage = computed(() =>
         <img
           :src="message.midia_url"
           alt="Imagem"
-          class="mb-1 max-h-64 max-w-full rounded"
+          class="mb-1 max-h-64 max-w-full cursor-zoom-in rounded transition hover:opacity-90"
+          @click="openLightbox"
         />
         <p
           v-if="message.mensagem"
           class="whitespace-pre-wrap break-words"
           v-html="formattedMessage"
+          @click="onMessageClick"
         />
       </template>
 
       <template v-else-if="isVideo && message.midia_url">
-        <video
-          :src="message.midia_url"
-          controls
-          class="mb-1 max-h-64 max-w-full rounded bg-black"
-        />
+        <div class="relative mb-1">
+          <video
+            :src="message.midia_url"
+            controls
+            class="max-h-64 max-w-full rounded bg-black"
+          />
+          <button
+            type="button"
+            class="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white opacity-80 transition hover:opacity-100"
+            title="Expandir"
+            @click.stop="openLightbox"
+          >
+            <ZoomIn class="h-4 w-4" />
+          </button>
+        </div>
         <p
           v-if="message.mensagem"
           class="whitespace-pre-wrap break-words"
           v-html="formattedMessage"
+          @click="onMessageClick"
         />
       </template>
 
@@ -465,6 +522,7 @@ const formattedMessage = computed(() =>
           v-if="message.mensagem"
           class="whitespace-pre-wrap break-words"
           v-html="formattedMessage"
+          @click="onMessageClick"
         />
         <p v-else class="whitespace-pre-wrap break-words">—</p>
       </template>
@@ -534,5 +592,24 @@ const formattedMessage = computed(() =>
         </button>
       </PopoverContent>
     </Popover>
+
+    <ChatsMediaLightbox
+      v-if="message.midia_url && (isImage || isVideo)"
+      v-model:open="lightboxOpen"
+      :src="message.midia_url"
+      :type="lightboxType"
+    />
   </div>
 </template>
+
+<style scoped>
+:deep(.mention) {
+  font-weight: 600;
+  cursor: pointer;
+  color: rgb(125 211 252); /* sky-300 */
+  text-decoration: none;
+}
+:deep(.mention:hover) {
+  text-decoration: underline;
+}
+</style>

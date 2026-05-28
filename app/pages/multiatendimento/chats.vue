@@ -327,6 +327,122 @@ const sending = ref(false)
 const errorMsg = ref('')
 const inputMode = ref<'message' | 'note'>('message')
 
+const { map: participantsMap, nameFor: participantNameFor } = useParticipants()
+const JID_SUFFIXES_COMPOSE = ['@s.whatsapp.net', '@c.us', '@lid', '@g.us']
+
+type MentionOption = { jid: string; digits: string; name: string }
+
+const groupParticipants = computed<MentionOption[]>(() => {
+  if (!isGroupConv.value) return []
+  const seen = new Set<string>()
+  const out: MentionOption[] = []
+  for (const m of (messages.value ?? [])) {
+    const jid = (m as unknown as { quemmandou?: string | null }).quemmandou?.trim()
+    if (!jid || seen.has(jid)) continue
+    seen.add(jid)
+    const digits = (jid.split('@')[0] ?? '').replace(/\D/g, '')
+    if (!digits) continue
+    out.push({ jid, digits, name: participantNameFor(jid) || digits })
+  }
+  for (const [jid, row] of Object.entries(participantsMap.value)) {
+    if (seen.has(jid)) continue
+    const digits = (jid.split('@')[0] ?? '').replace(/\D/g, '')
+    if (!digits) continue
+    seen.add(jid)
+    out.push({ jid, digits, name: row.nome?.trim() || digits })
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+})
+
+const mentionQuery = ref<string | null>(null)
+const mentionTokenStart = ref(0)
+const mentionIndex = ref(0)
+
+const mentionResults = computed<MentionOption[]>(() => {
+  if (mentionQuery.value === null) return []
+  const q = mentionQuery.value.toLowerCase()
+  const list = groupParticipants.value
+  if (!q) return list.slice(0, 8)
+  return list
+    .filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) || p.digits.includes(q),
+    )
+    .slice(0, 8)
+})
+
+const mentionOpen = computed(
+  () =>
+    isGroupConv.value &&
+    inputMode.value === 'message' &&
+    mentionQuery.value !== null &&
+    mentionResults.value.length > 0,
+)
+
+function detectMention() {
+  const el = inputEl.value
+  if (!el || !isGroupConv.value || inputMode.value !== 'message') {
+    mentionQuery.value = null
+    return
+  }
+  const pos = el.selectionStart ?? input.value.length
+  const before = input.value.slice(0, pos)
+  const atIdx = before.lastIndexOf('@')
+  if (atIdx < 0) {
+    mentionQuery.value = null
+    return
+  }
+  const prev = atIdx === 0 ? '' : before[atIdx - 1]
+  if (prev && !/\s/.test(prev)) {
+    mentionQuery.value = null
+    return
+  }
+  const token = before.slice(atIdx + 1)
+  if (/\s/.test(token)) {
+    mentionQuery.value = null
+    return
+  }
+  mentionTokenStart.value = atIdx
+  mentionQuery.value = token
+  mentionIndex.value = 0
+}
+
+function applyMention(opt: MentionOption) {
+  const el = inputEl.value
+  const pos = el?.selectionStart ?? input.value.length
+  const before = input.value.slice(0, mentionTokenStart.value)
+  const after = input.value.slice(pos)
+  const insert = `@${opt.digits} `
+  input.value = before + insert + after
+  mentionQuery.value = null
+  nextTick(() => {
+    const newPos = before.length + insert.length
+    el?.focus()
+    el?.setSelectionRange(newPos, newPos)
+  })
+}
+
+function collectMentionedJids(text: string): string[] {
+  const out = new Set<string>()
+  const all = groupParticipants.value
+  const byDigits = new Map(all.map((p) => [p.digits, p.jid]))
+  const re = /(?:^|\s)@(\d{5,})/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const digits = m[1]!
+    const jid = byDigits.get(digits)
+    if (jid) {
+      out.add(jid)
+    } else {
+      for (const sfx of JID_SUFFIXES_COMPOSE) {
+        out.add(digits + sfx)
+        break
+      }
+    }
+  }
+  return [...out]
+}
+
 type ThreadMessage = NonNullable<typeof messages.value>[number]
 const replyingTo = ref<ThreadMessage | null>(null)
 
@@ -419,7 +535,8 @@ async function send() {
     if (mode === 'note') {
       await sendNote(text)
     } else {
-      await sendText(text, { quotedMessageId: quotedId })
+      const mentioned = collectMentionedJids(text)
+      await sendText(text, { quotedMessageId: quotedId, mentioned })
     }
   } catch (err) {
     errorMsg.value =
@@ -432,6 +549,32 @@ async function send() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
+  if (mentionOpen.value) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      mentionIndex.value = Math.min(
+        mentionResults.value.length - 1,
+        mentionIndex.value + 1,
+      )
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      mentionIndex.value = Math.max(0, mentionIndex.value - 1)
+      return
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      const opt = mentionResults.value[mentionIndex.value]
+      if (opt) applyMention(opt)
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      mentionQuery.value = null
+      return
+    }
+  }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
     send()
@@ -850,15 +993,38 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 </button>
               </PopoverContent>
             </Popover>
-            <textarea
-              ref="inputEl"
-              v-model="input"
-              rows="1"
-              :placeholder="inputMode === 'note' ? 'Nota interna (só equipe vê)' : 'Digite uma mensagem'"
-              class="min-h-[40px] flex-1 resize-none overflow-hidden rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              :class="inputMode === 'note' ? 'border-amber-400' : ''"
-              @keydown="handleKeydown"
-            />
+            <div class="relative flex-1">
+              <div
+                v-if="mentionOpen"
+                class="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-72 overflow-y-auto rounded-md border bg-popover p-1 text-sm shadow-md"
+              >
+                <button
+                  v-for="(opt, i) in mentionResults"
+                  :key="opt.jid"
+                  type="button"
+                  class="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left"
+                  :class="i === mentionIndex ? 'bg-accent' : 'hover:bg-accent/60'"
+                  @mousedown.prevent="applyMention(opt)"
+                  @mouseenter="mentionIndex = i"
+                >
+                  <span class="truncate font-medium">{{ opt.name }}</span>
+                  <span class="ml-auto truncate text-[11px] text-muted-foreground">{{ opt.digits }}</span>
+                </button>
+              </div>
+              <textarea
+                ref="inputEl"
+                v-model="input"
+                rows="1"
+                :placeholder="inputMode === 'note' ? 'Nota interna (só equipe vê)' : 'Digite uma mensagem'"
+                class="min-h-[40px] w-full resize-none overflow-hidden rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                :class="inputMode === 'note' ? 'border-amber-400' : ''"
+                @keydown="handleKeydown"
+                @keyup="detectMention"
+                @click="detectMention"
+                @input="detectMention"
+                @blur="mentionQuery = null"
+              />
+            </div>
             <ChatsAudioRecorder
               v-if="!input.trim() && inputMode === 'message'"
               @sent="errorMsg = ''"

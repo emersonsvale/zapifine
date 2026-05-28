@@ -696,7 +696,10 @@ export function useChats() {
 
   async function sendText(
     text: string,
-    opts: { quotedMessageId?: string | null } = {},
+    opts: {
+      quotedMessageId?: string | null
+      mentioned?: string[] | null
+    } = {},
   ) {
     const c = selectedConversation.value
     if (!c || !companyId.value) throw new Error('Sem conversa selecionada.')
@@ -710,6 +713,7 @@ export function useChats() {
     const signature = await loadSignature(supabase, authUser.value?.id)
     const finalText = buildPrefixed(trimmed, signature)
     const quotedMessageId = opts.quotedMessageId?.trim() || null
+    const mentioned = (opts.mentioned ?? []).filter((j) => j && j.trim())
 
     // Optimistic insert
     const tempId = -Date.now()
@@ -735,6 +739,7 @@ export function useChats() {
         ...(quotedMessageId
           ? { quoted_message_id: quotedMessageId, ...(c.remoteJid ? { quoted_chat: c.remoteJid } : {}) }
           : {}),
+        ...(mentioned.length > 0 ? { mentioned } : {}),
       })
       const messageId = fnData?._messageId ?? null
 
