@@ -78,6 +78,7 @@ export default defineEventHandler(async (event) => {
         companie_id: companieId,
         funcao_user: role,
         setor_id: setorId,
+        is_onboarding_complete: true,
       } as never)
       .eq('id', invited.user.id)
     if (patchErr) {
