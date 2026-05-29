@@ -1,11 +1,28 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 
 definePageMeta({ layout: 'auth' })
-useHead({ title: 'Redefinir senha - Zapifine' })
+useHead({ title: 'Definir senha - Zapifine' })
 
 const supabase = useSupabaseClient()
+
+const flow = ref<'invite' | 'recovery'>('recovery')
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  if (window.location.hash.includes('type=invite')) flow.value = 'invite'
+})
+const heading = computed(() =>
+  flow.value === 'invite' ? 'Crie sua senha de acesso' : 'Defina sua nova senha',
+)
+const submitLabel = computed(() =>
+  flow.value === 'invite' ? 'Criar senha' : 'Redefinir senha',
+)
+const successCopy = computed(() =>
+  flow.value === 'invite'
+    ? 'Senha criada! Redirecionando para o login...'
+    : 'Senha redefinida! Redirecionando para o login...',
+)
 
 const form = reactive({ password: '', confirm: '' })
 const touched = reactive({ password: false, confirm: false })
@@ -53,7 +70,7 @@ async function handleReset() {
       errorMsg.value = error.message
       return
     }
-    successMsg.value = 'Senha redefinida! Redirecionando para o login...'
+    successMsg.value = successCopy.value
     setTimeout(() => navigateTo('/login'), 1500)
   } catch (err) {
     errorMsg.value =
@@ -70,7 +87,7 @@ async function handleReset() {
       <ZapifineLogo :size="40" />
     </div>
 
-    <h1 class="mb-6 text-[15px] font-medium">Defina sua nova senha</h1>
+    <h1 class="mb-6 text-[15px] font-medium">{{ heading }}</h1>
 
     <form class="space-y-5" novalidate @submit.prevent="handleReset">
       <div class="space-y-1.5">
@@ -150,7 +167,7 @@ async function handleReset() {
 
       <Button type="submit" :disabled="loading" class="w-full" size="lg">
         <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
-        {{ loading ? 'Salvando...' : 'Redefinir senha' }}
+        {{ loading ? 'Salvando...' : submitLabel }}
       </Button>
     </form>
 

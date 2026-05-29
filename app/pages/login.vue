@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 
 definePageMeta({ layout: 'auth' })
 useHead({ title: 'Entrar - Zapifine' })
 
 const supabase = useSupabaseClient()
+
+onMounted(() => {
+  if (typeof window === 'undefined') return
+  const hash = window.location.hash
+  if (!hash) return
+  if (hash.includes('type=invite') || hash.includes('type=recovery')) {
+    window.location.replace('/reset-password' + hash)
+  }
+})
 
 const email = ref('')
 const password = ref('')

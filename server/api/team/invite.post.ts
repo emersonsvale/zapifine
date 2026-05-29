@@ -52,9 +52,17 @@ export default defineEventHandler(async (event) => {
 
   const admin = useSupabaseAdmin()
 
+  const reqHeaders = getRequestHeaders(event)
+  const origin =
+    process.env.NUXT_PUBLIC_SITE_URL ||
+    reqHeaders.origin ||
+    (reqHeaders.host ? `https://${reqHeaders.host}` : null)
+  const redirectTo = origin ? `${origin}/reset-password` : undefined
+
   const { data: invited, error: inviteErr } =
     await admin.auth.admin.inviteUserByEmail(email, {
       data: { companie_id: companieId, funcao_user: role },
+      redirectTo,
     })
 
   if (inviteErr) {
