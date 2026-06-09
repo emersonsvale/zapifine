@@ -34,9 +34,16 @@ export function usePushNotifications() {
   async function getRegistration(): Promise<ServiceWorkerRegistration | null> {
     if (!checkSupport()) return null
     try {
-      const existing = await navigator.serviceWorker.getRegistration('/sw.js')
-      if (existing) return existing
-      return await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      let reg = await navigator.serviceWorker.getRegistration('/sw.js')
+      if (!reg) {
+        reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      }
+      // Aguarda SW ficar ativo (pushManager.subscribe exige active worker)
+      if (!reg.active) {
+        await navigator.serviceWorker.ready
+        reg = (await navigator.serviceWorker.getRegistration('/sw.js')) ?? reg
+      }
+      return reg
     } catch (err) {
       console.error('[push] sw register', err)
       return null
