@@ -34,7 +34,10 @@ export default defineNuxtConfig({
           content: 'Zapifine - Chatbot inteligente para WhatsApp que automatiza seu atendimento.',
         },
       ],
-      link: [{ rel: 'icon', type: 'image/png', href: '/favicon.png' }],
+      link: [
+        { rel: 'icon', type: 'image/png', href: '/favicon.png' },
+        { rel: 'manifest', href: '/manifest.webmanifest' },
+      ],
     },
   },
 
@@ -49,11 +52,15 @@ export default defineNuxtConfig({
     evoApiUrl: process.env.EVO_API_URL ?? '',
     evoGlobalApiKey: process.env.EVO_GLOBAL_API_KEY ?? '',
     cronSecret: process.env.CRON_SECRET ?? '',
+    vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
+    vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',
+    vapidSubject: process.env.VAPID_SUBJECT ?? 'mailto:suporte@zapifine.com',
     public: {
       metaAppId: process.env.META_APP_ID ?? '',
       metaConfigId: process.env.META_CONFIG_ID ?? '',
       metaGraphVersion: process.env.META_GRAPH_VERSION ?? 'v20.0',
       whatsApiUrl: process.env.WHATS_API_URL ?? 'https://whats.zapifine.com',
+      vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
     },
   },
 

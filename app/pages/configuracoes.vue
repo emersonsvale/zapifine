@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { User, Users, Lock, Tag } from 'lucide-vue-next'
+import { User, Users, Lock, Tag, Bell } from 'lucide-vue-next'
 
 useHead({ title: 'Configurações - Zapifine' })
 
-const active = ref<'perfil' | 'usuarios' | 'setores' | 'seguranca'>('perfil')
+const active = ref<'perfil' | 'usuarios' | 'setores' | 'seguranca' | 'notificacoes'>('perfil')
 </script>
 
 <template>
@@ -34,6 +34,10 @@ const active = ref<'perfil' | 'usuarios' | 'setores' | 'seguranca'>('perfil')
           <Lock class="h-4 w-4" />
           Segurança
         </TabsTrigger>
+        <TabsTrigger value="notificacoes" class="px-4">
+          <Bell class="h-4 w-4" />
+          Notificações
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="perfil">
@@ -47,6 +51,9 @@ const active = ref<'perfil' | 'usuarios' | 'setores' | 'seguranca'>('perfil')
       </TabsContent>
       <TabsContent value="seguranca">
         <SettingsSecurityTab />
+      </TabsContent>
+      <TabsContent value="notificacoes">
+        <SettingsNotificacoesTab />
       </TabsContent>
     </Tabs>
   </div>
