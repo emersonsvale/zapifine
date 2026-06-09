@@ -43,9 +43,21 @@ CREATE POLICY push_subscriptions_delete_own
 -- pg_net extension para chamar o endpoint Nitro de dentro do trigger
 CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
+-- Tabela de configuracao (Supabase managed nao permite ALTER DATABASE)
+CREATE TABLE IF NOT EXISTS public.app_config (
+  key text PRIMARY KEY,
+  value text NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.app_config ENABLE ROW LEVEL SECURITY;
+-- sem policies para authenticated: so service_role acessa
+
 -- Settings (rodar manualmente apos aplicar a migration):
---   ALTER DATABASE postgres SET app.push_webhook_url = 'https://app.zapifine.com/api/push/dispatch';
---   ALTER DATABASE postgres SET app.push_webhook_secret = '<CRON_SECRET>';
+--   INSERT INTO public.app_config (key, value) VALUES
+--     ('push_webhook_url', 'https://app.zapifine.com/api/push/dispatch'),
+--     ('push_webhook_secret', '<CRON_SECRET>')
+--   ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 
 CREATE OR REPLACE FUNCTION public.fn_push_dispatch_on_new_message()
 RETURNS trigger
@@ -61,12 +73,8 @@ BEGIN
     RETURN NEW;
   END IF;
 
-  BEGIN
-    v_url := current_setting('app.push_webhook_url', true);
-    v_secret := current_setting('app.push_webhook_secret', true);
-  EXCEPTION WHEN OTHERS THEN
-    RETURN NEW;
-  END;
+  SELECT value INTO v_url FROM public.app_config WHERE key = 'push_webhook_url';
+  SELECT value INTO v_secret FROM public.app_config WHERE key = 'push_webhook_secret';
 
   IF v_url IS NULL OR v_url = '' THEN
     RETURN NEW;

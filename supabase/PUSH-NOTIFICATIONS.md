@@ -55,11 +55,14 @@ Cria:
 
 ## 5. Configurar URL do webhook no banco
 
-Rode no SQL Editor da instância de produção (uma vez):
+Supabase managed não permite `ALTER DATABASE SET`. Use a tabela
+`public.app_config` (criada na migration, acessível só via service role):
 
 ```sql
-ALTER DATABASE postgres SET app.push_webhook_url = 'https://app.zapifine.com/api/push/dispatch';
-ALTER DATABASE postgres SET app.push_webhook_secret = '<CRON_SECRET>';
+INSERT INTO public.app_config (key, value) VALUES
+  ('push_webhook_url', 'https://app.zapifine.com/api/push/dispatch'),
+  ('push_webhook_secret', '<CRON_SECRET>')
+ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now();
 ```
 
 Para dev local, troque a URL pelo seu túnel (ngrok / cloudflared) apontando
