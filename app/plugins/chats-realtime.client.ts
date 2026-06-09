@@ -9,6 +9,37 @@ export default defineNuxtPlugin(() => {
 
   let channel: ReturnType<typeof supabase.channel> | null = null
   let audioCtx: AudioContext | null = null
+  let bipEl: HTMLAudioElement | null = null
+
+  function getBipAudio(): HTMLAudioElement | null {
+    if (typeof window === 'undefined') return null
+    if (!bipEl) {
+      try {
+        bipEl = new Audio('/bipmensagem.mpeg')
+        bipEl.preload = 'auto'
+        bipEl.volume = 0.8
+      } catch {
+        bipEl = null
+      }
+    }
+    return bipEl
+  }
+
+  // Pré-carrega + destrava autoplay no primeiro gesto
+  if (typeof window !== 'undefined') {
+    const unlock = () => {
+      const a = getBipAudio()
+      if (!a) return
+      a.muted = true
+      a.play().then(() => {
+        a.pause()
+        a.currentTime = 0
+        a.muted = false
+      }).catch(() => { a.muted = false })
+    }
+    window.addEventListener('click', unlock, { once: true, capture: true })
+    window.addEventListener('keydown', unlock, { once: true, capture: true })
+  }
 
   function notifSupported() {
     return typeof window !== 'undefined' && 'Notification' in window
@@ -56,7 +87,7 @@ export default defineNuxtPlugin(() => {
     } catch {}
   }
 
-  function playBeep() {
+  function playOscFallback() {
     try {
       const Ctx =
         window.AudioContext ||
@@ -78,6 +109,23 @@ export default defineNuxtPlugin(() => {
       osc.start(now)
       osc.stop(now + 0.42)
     } catch {}
+  }
+
+  function playBeep() {
+    const a = getBipAudio()
+    if (!a) {
+      playOscFallback()
+      return
+    }
+    try {
+      a.currentTime = 0
+      const p = a.play()
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => playOscFallback())
+      }
+    } catch {
+      playOscFallback()
+    }
   }
 
   async function syncAuth() {
