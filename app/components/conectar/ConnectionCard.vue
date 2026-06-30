@@ -10,6 +10,7 @@ import {
   Loader2,
   MoreVertical,
   RefreshCw,
+  History,
 } from 'lucide-vue-next'
 import {
   providerLabel,
@@ -25,7 +26,28 @@ const emit = defineEmits<{
   (e: 'edit', id: string): void
 }>()
 
-const busy = ref<'connect' | 'logout' | 'remove' | 'principal' | null>(null)
+const busy = ref<'connect' | 'logout' | 'remove' | 'principal' | 'sync' | null>(null)
+const syncMsg = ref<string | null>(null)
+const { syncHistory } = useChannelConnections()
+
+const canSync = computed(
+  () => props.conn.is_connected && props.conn.provider === 'whatsapp_uazapi',
+)
+
+async function handleSync() {
+  if (!canSync.value) return
+  busy.value = 'sync'
+  syncMsg.value = null
+  try {
+    const r = await syncHistory(props.conn.id)
+    syncMsg.value = `${r.imported} novas · ${r.skipped} já existiam · ${r.chats} chats`
+  } catch (err) {
+    syncMsg.value = err instanceof Error ? err.message : 'Falha no sync'
+  } finally {
+    busy.value = null
+    setTimeout(() => (syncMsg.value = null), 6000)
+  }
+}
 
 const statusLabel = computed(() => {
   const c = props.conn
@@ -141,6 +163,20 @@ async function handle(action: 'connect' | 'logout' | 'remove' | 'principal') {
           <QrCode v-else class="h-4 w-4" />
           {{ conn.qr_code_url ? 'Reabrir QR' : 'Conectar' }}
         </Button>
+      </div>
+
+      <div v-if="canSync" class="flex flex-col gap-1">
+        <Button
+          size="sm"
+          variant="outline"
+          :disabled="busy === 'sync'"
+          @click="handleSync"
+        >
+          <Loader2 v-if="busy === 'sync'" class="h-4 w-4 animate-spin" />
+          <History v-else class="h-4 w-4" />
+          Sincronizar conversas
+        </Button>
+        <p v-if="syncMsg" class="text-xs text-muted-foreground">{{ syncMsg }}</p>
       </div>
     </CardContent>
   </Card>

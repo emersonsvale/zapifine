@@ -112,6 +112,23 @@ export function useChannelConnections() {
     return res
   }
 
+  async function syncHistory(
+    id: string,
+    body?: { chatsLimit?: number; messagesPerChat?: number },
+  ): Promise<{ ok: boolean; chats: number; imported: number; skipped: number; errors: number }> {
+    const res = await $fetch<{
+      ok: boolean
+      chats: number
+      imported: number
+      skipped: number
+      errors: number
+    }>(`/api/connections/${id}/sync`, {
+      method: 'POST',
+      body: body ?? {},
+    })
+    return res
+  }
+
   async function checkState(id: string): Promise<{ state: string | null; connected: boolean }> {
     const res = await $fetch<{ state: string | null; connected: boolean }>(`/api/connections/${id}/state`)
     await refresh()
@@ -197,6 +214,7 @@ export function useChannelConnections() {
     pending,
     createConnection,
     connect,
+    syncHistory,
     checkState,
     logout,
     remove,
