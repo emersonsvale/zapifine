@@ -14,8 +14,30 @@ const selectedProvider = ref<ChannelType | null>(null)
 
 const showConnect = ref(false)
 const showCloud = ref(false)
+const showMetaOAuth = ref(false)
+const metaOAuthCompleted = ref(false)
 const showEdit = ref(false)
 const activeConn = ref<ChannelConnection | null>(null)
+
+const route = useRoute()
+const router = useRouter()
+
+onMounted(async () => {
+  const q = route.query
+  if (q.meta_oauth === 'success' && typeof q.id === 'string') {
+    await refresh()
+    const conn = connections.value?.find((c) => c.id === q.id) ?? null
+    if (conn) {
+      activeConn.value = conn
+      metaOAuthCompleted.value = true
+      showMetaOAuth.value = true
+    }
+    router.replace({ query: {} })
+  } else if (q.meta_oauth === 'error') {
+    alert(`Falha OAuth Meta: ${q.reason ?? 'erro desconhecido'}`)
+    router.replace({ query: {} })
+  }
+})
 
 function handleSelectProvider(p: ChannelType) {
   selectedProvider.value = p
@@ -28,6 +50,9 @@ function openProviderDialog(conn: ChannelConnection) {
     showConnect.value = true
   } else if (conn.provider === 'whatsapp_cloud') {
     showCloud.value = true
+  } else if (conn.provider === 'facebook' || conn.provider === 'instagram') {
+    metaOAuthCompleted.value = false
+    showMetaOAuth.value = true
   }
 }
 
@@ -131,6 +156,12 @@ function handleEdit(id: string) {
     <ConectarCloudApiConnectDialog
       v-model:open="showCloud"
       :connection="activeConn"
+      @configured="refresh"
+    />
+    <ConectarMetaOAuthConnectDialog
+      v-model:open="showMetaOAuth"
+      :connection="activeConn"
+      :oauth-completed="metaOAuthCompleted"
       @configured="refresh"
     />
     <ConectarEditConnectionDialog

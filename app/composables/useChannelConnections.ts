@@ -60,13 +60,13 @@ export const PROVIDER_META: ProviderMeta[] = [
     value: 'instagram',
     label: 'Instagram Direct',
     description: 'Mensagens diretas Instagram via Meta Login.',
-    available: false,
+    available: true,
   },
   {
     value: 'facebook',
     label: 'Facebook Messenger',
     description: 'Mensagens Messenger via Meta Login.',
-    available: false,
+    available: true,
   },
 ]
 
@@ -158,6 +158,38 @@ export function useChannelConnections() {
     return res.connection
   }
 
+  type MetaPage = {
+    id: string
+    name: string
+    access_token: string
+    category: string | null
+    instagram: { id: string; username: string | null } | null
+  }
+
+  async function listMetaPages(id: string): Promise<MetaPage[]> {
+    const res = await $fetch<{ pages: MetaPage[] }>(`/api/connections/${id}/meta-pages`)
+    return res.pages ?? []
+  }
+
+  async function configureMetaPage(
+    id: string,
+    body: {
+      user_access_token: string
+      page_id: string
+      page_access_token: string
+      page_name?: string
+      instagram_business_id?: string | null
+      app_id?: string | null
+    },
+  ): Promise<ChannelConnection> {
+    const res = await $fetch<{ connection: ChannelConnection }>(
+      `/api/connections/${id}/configure-meta-page`,
+      { method: 'POST', body },
+    )
+    await refresh()
+    return res.connection
+  }
+
   return {
     connections,
     principal,
@@ -170,5 +202,7 @@ export function useChannelConnections() {
     remove,
     patch,
     configureCloud,
+    listMetaPages,
+    configureMetaPage,
   }
 }
