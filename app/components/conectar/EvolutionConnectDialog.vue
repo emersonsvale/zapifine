@@ -25,6 +25,7 @@ const qrShownAt = ref<number | null>(null)
 const now = ref(Date.now())
 const state = ref<string | null>(null)
 const connected = ref(false)
+const localQr = ref<string | null>(null)
 
 let tickTimer: ReturnType<typeof setInterval> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -57,7 +58,7 @@ function stopTimers() {
 onBeforeUnmount(stopTimers)
 
 const qrImage = computed(() => {
-  const qr = props.connection?.qr_code_url
+  const qr = localQr.value ?? props.connection?.qr_code_url
   if (!qr) return null
   return qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`
 })
@@ -73,7 +74,8 @@ async function regenerate() {
   errorMsg.value = ''
   generating.value = true
   try {
-    await connect(props.connection.id)
+    const res = await connect(props.connection.id)
+    localQr.value = res.qrcode ?? res.connection?.qr_code_url ?? null
     qrShownAt.value = Date.now()
     startTimers(props.connection.id)
   } catch (err) {
@@ -97,6 +99,7 @@ watch(
       stopTimers()
       qrShownAt.value = null
       errorMsg.value = ''
+      localQr.value = null
     }
   },
 )
