@@ -4,8 +4,8 @@ import {
   LayoutDashboard,
   Bot,
   Building2,
-  MessageCircle,
   MessagesSquare,
+  PlugZap,
   Headphones,
   UsersRound,
   GitBranch,
@@ -48,7 +48,7 @@ const nav: Entry[] = [
   { type: 'item', to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { type: 'item', to: '/bot', label: 'Personalização do bot', icon: Bot },
   { type: 'item', to: '/empresa', label: 'Empresa', icon: Building2 },
-  { type: 'item', to: '/whatsapp', label: 'Conectar Whatsapp', icon: MessageCircle },
+  { type: 'item', to: '/conectar', label: 'Conectar', icon: PlugZap },
   {
     type: 'group',
     label: 'Multiatendimento',
