@@ -14,6 +14,7 @@ type LembreteRow = {
   target: string | null
   payload: Record<string, unknown> | null
   attempts: number
+  whatsapp_connection_id: string | null
 }
 
 type AgendamentoLite = {
@@ -76,7 +77,7 @@ export default defineEventHandler(async (event) => {
 
   const { data: pending, error: pErr } = await admin
     .from('agenda_lembretes')
-    .select('id, agendamento_id, fire_at, channel, target, payload, attempts')
+    .select('id, agendamento_id, fire_at, channel, target, payload, attempts, whatsapp_connection_id')
     .eq('status', 'pending')
     .lte('fire_at', nowIso)
     .order('fire_at', { ascending: true })
@@ -152,6 +153,7 @@ export default defineEventHandler(async (event) => {
         })
         await sendWhatsappText({
           companyId: ag.companie_id,
+          connectionId: lem.whatsapp_connection_id ?? undefined,
           to: lem.target,
           text: body,
         })

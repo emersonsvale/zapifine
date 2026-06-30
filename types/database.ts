@@ -168,6 +168,7 @@ export type Database = {
           sent_at: string | null
           status: string
           target: string | null
+          whatsapp_connection_id: string | null
         }
         Insert: {
           agendamento_id: string
@@ -181,6 +182,7 @@ export type Database = {
           sent_at?: string | null
           status?: string
           target?: string | null
+          whatsapp_connection_id?: string | null
         }
         Update: {
           agendamento_id?: string
@@ -194,6 +196,7 @@ export type Database = {
           sent_at?: string | null
           status?: string
           target?: string | null
+          whatsapp_connection_id?: string | null
         }
         Relationships: [
           {
@@ -201,6 +204,13 @@ export type Database = {
             columns: ["agendamento_id"]
             isOneToOne: false
             referencedRelation: "agendamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agenda_lembretes_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
             referencedColumns: ["id"]
           },
         ]
@@ -1979,6 +1989,7 @@ export type Database = {
           remoteJid: string | null
           setor_id: string | null
           user_id: string | null
+          whatsapp_connection_id: string | null
         }
         Insert: {
           assigned_at?: string | null
@@ -1995,6 +2006,7 @@ export type Database = {
           remoteJid?: string | null
           setor_id?: string | null
           user_id?: string | null
+          whatsapp_connection_id?: string | null
         }
         Update: {
           assigned_at?: string | null
@@ -2011,6 +2023,7 @@ export type Database = {
           remoteJid?: string | null
           setor_id?: string | null
           user_id?: string | null
+          whatsapp_connection_id?: string | null
         }
         Relationships: [
           {
@@ -2220,16 +2233,21 @@ export type Database = {
           company_id: string | null
           connection_status: string | null
           created_at: string | null
+          display_name: string | null
+          external_id: string | null
           id: string
           instance_id: string | null
           instance_name: string | null
           is_connected: boolean | null
+          is_principal: boolean
           last_connected_at: string | null
-          n8n_workflow_id: string | null
+          meta_ig_business_id: string | null
+          meta_long_lived_token: string | null
+          meta_page_id: string | null
           phone_number: string | null
           provider: Database["public"]["Enums"]["enum_whatsapp_provider"]
           qr_code_url: string | null
-          remoteJid: string | null
+          uazapi_instance_token: string | null
           updated_at: string | null
           user_id: string | null
         }
@@ -2246,16 +2264,21 @@ export type Database = {
           company_id?: string | null
           connection_status?: string | null
           created_at?: string | null
+          display_name?: string | null
+          external_id?: string | null
           id?: string
           instance_id?: string | null
           instance_name?: string | null
           is_connected?: boolean | null
+          is_principal?: boolean
           last_connected_at?: string | null
-          n8n_workflow_id?: string | null
+          meta_ig_business_id?: string | null
+          meta_long_lived_token?: string | null
+          meta_page_id?: string | null
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["enum_whatsapp_provider"]
           qr_code_url?: string | null
-          remoteJid?: string | null
+          uazapi_instance_token?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -2272,16 +2295,21 @@ export type Database = {
           company_id?: string | null
           connection_status?: string | null
           created_at?: string | null
+          display_name?: string | null
+          external_id?: string | null
           id?: string
           instance_id?: string | null
           instance_name?: string | null
           is_connected?: boolean | null
+          is_principal?: boolean
           last_connected_at?: string | null
-          n8n_workflow_id?: string | null
+          meta_ig_business_id?: string | null
+          meta_long_lived_token?: string | null
+          meta_page_id?: string | null
           phone_number?: string | null
           provider?: Database["public"]["Enums"]["enum_whatsapp_provider"]
           qr_code_url?: string | null
-          remoteJid?: string | null
+          uazapi_instance_token?: string | null
           updated_at?: string | null
           user_id?: string | null
         }
@@ -2566,7 +2594,12 @@ export type Database = {
       enum_tipo_lembretes: "Agendamento" | "Confirmação"
       enum_tipo_pgto: "Pix" | "Cartao" | "Boleto"
       enum_tipo_user: "OWNER" | "EMPLOYEE" | "VIEWER"
-      enum_whatsapp_provider: "evolution" | "cloud_api"
+      enum_whatsapp_provider:
+        | "whatsapp_evolution"
+        | "whatsapp_uazapi"
+        | "whatsapp_cloud"
+        | "instagram"
+        | "facebook"
       status_bot: "Online" | "Ausente" | "Offline"
     }
     CompositeTypes: {
@@ -2711,7 +2744,13 @@ export const Constants = {
       enum_tipo_lembretes: ["Agendamento", "Confirmação"],
       enum_tipo_pgto: ["Pix", "Cartao", "Boleto"],
       enum_tipo_user: ["OWNER", "EMPLOYEE", "VIEWER"],
-      enum_whatsapp_provider: ["evolution", "cloud_api"],
+      enum_whatsapp_provider: [
+        "whatsapp_evolution",
+        "whatsapp_uazapi",
+        "whatsapp_cloud",
+        "instagram",
+        "facebook",
+      ],
       status_bot: ["Online", "Ausente", "Offline"],
     },
   },

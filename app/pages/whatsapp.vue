@@ -12,7 +12,7 @@ useHead({ title: 'Conectar WhatsApp - Zapifine' })
 
 const { connection, isConnected, provider } = useWhatsappConnection()
 
-const active = ref<'evolution' | 'cloud_api'>('evolution')
+const active = ref<'whatsapp_evolution' | 'whatsapp_cloud'>('whatsapp_evolution')
 
 watch(
   provider,
@@ -33,7 +33,7 @@ function formatLastConnection(iso: string | null | undefined) {
 }
 
 const providerLabel = computed(() =>
-  connection.value?.provider === 'cloud_api' ? 'Cloud API' : 'Evolution Go',
+  connection.value?.provider === 'whatsapp_cloud' ? 'Cloud API' : 'Evolution Go',
 )
 </script>
 
@@ -49,20 +49,20 @@ const providerLabel = computed(() =>
     <div class="grid gap-6 lg:grid-cols-[1fr_22rem]">
       <Tabs v-model="active" class="gap-4">
         <TabsList class="h-11 p-1">
-          <TabsTrigger value="evolution" class="px-4">
+          <TabsTrigger value="whatsapp_evolution" class="px-4">
             <QrCode class="h-4 w-4" />
             Evolution Go
           </TabsTrigger>
-          <TabsTrigger value="cloud_api" class="px-4">
+          <TabsTrigger value="whatsapp_cloud" class="px-4">
             <ShieldCheck class="h-4 w-4" />
             Cloud API (Oficial)
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="evolution">
+        <TabsContent value="whatsapp_evolution">
           <WhatsappEvolutionPanel />
         </TabsContent>
-        <TabsContent value="cloud_api">
+        <TabsContent value="whatsapp_cloud">
           <WhatsappCloudApiPanel />
         </TabsContent>
       </Tabs>

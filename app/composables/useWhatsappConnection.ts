@@ -3,7 +3,7 @@ import type { Database } from '~~/types/database'
 type WhatsappConnection =
   Database['public']['Tables']['whatsapp_connections']['Row']
 
-export type WhatsappProvider = 'evolution' | 'cloud_api'
+export type WhatsappProvider = 'whatsapp_evolution' | 'whatsapp_cloud'
 
 type EvoCreateResponse = {
   instance?: { instanceName?: string; instanceId?: string; status?: string }
@@ -79,7 +79,7 @@ export function useWhatsappConnection() {
   )
 
   const provider = computed<WhatsappProvider>(
-    () => (connection.value?.provider as WhatsappProvider) ?? 'evolution',
+    () => (connection.value?.provider as WhatsappProvider) ?? 'whatsapp_evolution',
   )
 
   const isConnected = computed(
@@ -92,7 +92,7 @@ export function useWhatsappConnection() {
     const c = connection.value
     if (!c) return 'Whatsapp Desconectado'
     if (isConnected.value) return 'WhatsApp Conectado'
-    if (c.provider === 'cloud_api') return 'Aguardando configuração Cloud API'
+    if (c.provider === 'whatsapp_cloud') return 'Aguardando configuração Cloud API'
     switch (c.connection_status) {
       case 'connecting':
       case 'pairing':
@@ -106,7 +106,7 @@ export function useWhatsappConnection() {
 
   async function invokeEdge<T>(
     path: string,
-    options: { method?: 'POST' | 'GET' | 'DELETE'; body?: unknown } = {},
+    options: { method?: 'POST' | 'GET' | 'DELETE'; body?: Record<string, unknown> } = {},
   ): Promise<T> {
     const { data, error } = await supabase.functions.invoke<T>(path, {
       method: options.method ?? 'POST',
@@ -124,7 +124,7 @@ export function useWhatsappConnection() {
     }
 
     const existing = connection.value
-    const isEvo = !existing || existing.provider === 'evolution'
+    const isEvo = !existing || existing.provider === 'whatsapp_evolution'
     let instanceName =
       existing?.instance_name ?? makeInstanceName(companyId.value)
     let instanceId = existing?.instance_id ?? null
@@ -155,7 +155,7 @@ export function useWhatsappConnection() {
       {
         company_id: companyId.value,
         user_id: authUser.value.id,
-        provider: 'evolution',
+        provider: 'whatsapp_evolution',
         instance_name: instanceName,
         instance_id: instanceId,
         apikey_evo: apiKey,
@@ -186,7 +186,7 @@ export function useWhatsappConnection() {
     const c = connection.value
     if (!c) return
 
-    if (c.provider === 'evolution' && c.instance_name) {
+    if (c.provider === 'whatsapp_evolution' && c.instance_name) {
       try {
         await invokeEdge(
           `evo-logoutinstance?instance=${encodeURIComponent(c.instance_name)}`,
@@ -214,7 +214,7 @@ export function useWhatsappConnection() {
 
   async function checkState() {
     const c = connection.value
-    if (!c || c.provider !== 'evolution' || !c.instance_name) return
+    if (!c || c.provider !== 'whatsapp_evolution' || !c.instance_name) return
     try {
       const res = await invokeEdge<EvoStateResponse>(
         `evo-connectionState?instance=${encodeURIComponent(c.instance_name)}`,
@@ -285,7 +285,7 @@ export function useWhatsappConnection() {
       {
         company_id: companyId.value,
         user_id: authUser.value.id,
-        provider: 'cloud_api',
+        provider: 'whatsapp_cloud',
         phone_number: verified.displayPhoneNumber ?? null,
         connection_status: 'open',
         is_connected: true,
@@ -344,7 +344,7 @@ export function useWhatsappConnection() {
   function startPolling() {
     stopPolling()
     if (!import.meta.client) return
-    if (provider.value !== 'evolution') return
+    if (provider.value !== 'whatsapp_evolution') return
     pollTimer = setInterval(() => {
       if (isConnected.value) {
         stopPolling()

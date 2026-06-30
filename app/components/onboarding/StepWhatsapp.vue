@@ -26,7 +26,7 @@ const emit = defineEmits<{ (e: 'next'): void }>()
 
       <div class="mt-5 flex flex-col items-center gap-2 sm:flex-row sm:justify-center">
         <Button as-child>
-          <NuxtLink to="/whatsapp">Conectar agora</NuxtLink>
+          <NuxtLink to="/conectar">Conectar agora</NuxtLink>
         </Button>
         <Button variant="outline" @click="emit('next')">
           Pular por enquanto

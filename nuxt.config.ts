@@ -51,6 +51,8 @@ export default defineNuxtConfig({
     googleOauthStateSecret: process.env.GOOGLE_OAUTH_STATE_SECRET ?? '',
     evoApiUrl: process.env.EVO_API_URL ?? '',
     evoGlobalApiKey: process.env.EVO_GLOBAL_API_KEY ?? '',
+    whatsApiInternalUrl: process.env.WHATS_API_INTERNAL_URL ?? process.env.WHATS_API_URL ?? 'https://whats.zapifine.com',
+    whatsApiInternalSecret: process.env.WHATS_API_INTERNAL_SECRET ?? '',
     cronSecret: process.env.CRON_SECRET ?? '',
     vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
     vapidPrivateKey: process.env.VAPID_PRIVATE_KEY ?? '',

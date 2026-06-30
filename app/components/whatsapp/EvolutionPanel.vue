@@ -69,7 +69,7 @@ const qrRemainingSec = computed(() =>
 const qrExpired = computed(() => {
   const c = connection.value
   if (!c || isConnected.value) return false
-  if (c.provider !== 'evolution') return false
+  if (c.provider !== 'whatsapp_evolution') return false
   if (!c.qr_code_url) return true
   if (!c.updated_at) return false
   return qrAgeMs.value > QR_LIFETIME_MS
@@ -111,7 +111,7 @@ async function handleDisconnect() {
   }
 }
 
-const panelActive = computed(() => connection.value?.provider === 'evolution')
+const panelActive = computed(() => connection.value?.provider === 'whatsapp_evolution')
 </script>
 
 <template>
@@ -202,7 +202,7 @@ const panelActive = computed(() => connection.value?.provider === 'evolution')
           </div>
           <div class="text-center">
             <p class="text-sm font-medium text-destructive">
-              {{ connection?.provider === 'evolution' && connection?.qr_code_url ? 'QR Code expirado' : 'Sem QR Code ativo' }}
+              {{ connection?.provider === 'whatsapp_evolution' && connection?.qr_code_url ? 'QR Code expirado' : 'Sem QR Code ativo' }}
             </p>
             <p class="mt-0.5 text-xs text-muted-foreground">
               Clique em "Gerar novo QR Code" para continuar.
