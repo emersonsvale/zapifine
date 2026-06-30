@@ -18,6 +18,7 @@ const accessToken = ref('')
 const phoneNumberId = ref('')
 const wabaId = ref('')
 const appId = ref('')
+const coexistence = ref(false)
 const submitting = ref(false)
 const errorMsg = ref('')
 
@@ -29,6 +30,7 @@ watch(
       phoneNumberId.value = props.connection.cloud_api_phone_number_id ?? ''
       wabaId.value = ''
       appId.value = ''
+      coexistence.value = false
       errorMsg.value = ''
     }
   },
@@ -44,6 +46,7 @@ async function submit() {
       phoneNumberId: phoneNumberId.value.trim(),
       wabaId: wabaId.value.trim() || null,
       appId: appId.value.trim() || null,
+      coexistence: coexistence.value,
     })
     emit('configured')
     emit('update:open', false)
@@ -98,6 +101,17 @@ async function submit() {
             <Input id="cloud_app" v-model="appId" placeholder="opcional" />
           </div>
         </div>
+
+        <label class="flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm hover:bg-muted/30">
+          <input v-model="coexistence" type="checkbox" class="mt-0.5 h-4 w-4" />
+          <span>
+            <span class="font-medium">Modo Coexistência</span>
+            <span class="mt-0.5 block text-xs text-muted-foreground">
+              Mantém o WhatsApp Business app rodando em paralelo à Cloud API
+              no mesmo número. Marque se você ainda usa o app oficial.
+            </span>
+          </span>
+        </label>
 
         <p
           v-if="errorMsg"
