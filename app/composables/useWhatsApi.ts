@@ -18,6 +18,8 @@ type SendTextPayload = {
   quoted_chat?: string
   mentioned?: string[]
   mentions_everyone?: boolean
+  conversa_id?: number
+  pause_ai?: boolean
 }
 
 type SendMediaPayload = {

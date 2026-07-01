@@ -178,6 +178,8 @@ async function handle(action: 'connect' | 'logout' | 'remove' | 'principal') {
         </Button>
         <p v-if="syncMsg" class="text-xs text-muted-foreground">{{ syncMsg }}</p>
       </div>
+
+      <AgentBindingSelect v-if="conn.is_connected" :connection-id="conn.id" />
     </CardContent>
   </Card>
 </template>

@@ -736,6 +736,8 @@ export function useChats() {
         company_id: companyId.value,
         number,
         text: finalText,
+        conversa_id: c.id,
+        pause_ai: true,
         ...(quotedMessageId
           ? { quoted_message_id: quotedMessageId, ...(c.remoteJid ? { quoted_chat: c.remoteJid } : {}) }
           : {}),
