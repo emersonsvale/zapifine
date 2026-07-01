@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 
 export type WhatsApiOptions = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   body?: unknown
   query?: Record<string, string | undefined>
 }
