@@ -35,6 +35,7 @@ export type ProviderMeta = {
   label: string
   description: string
   available: boolean
+  hidden?: boolean
 }
 
 export const PROVIDER_META: ProviderMeta[] = [
@@ -42,7 +43,8 @@ export const PROVIDER_META: ProviderMeta[] = [
     value: 'whatsapp_evolution',
     label: 'WhatsApp (Evolution)',
     description: 'Não oficial via QR Code. Baseado em whatsmeow/Baileys.',
-    available: true,
+    available: false,
+    hidden: true,
   },
   {
     value: 'whatsapp_uazapi',

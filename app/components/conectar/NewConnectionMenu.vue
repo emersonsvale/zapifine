@@ -3,6 +3,8 @@ import { Plus, ChevronDown } from 'lucide-vue-next'
 import { PROVIDER_META, type ChannelType } from '~/composables/useChannelConnections'
 
 const emit = defineEmits<{ (e: 'select', provider: ChannelType): void }>()
+
+const visibleProviders = computed(() => PROVIDER_META.filter((p) => !p.hidden))
 </script>
 
 <template>
@@ -18,7 +20,7 @@ const emit = defineEmits<{ (e: 'select', provider: ChannelType): void }>()
       <DropdownMenuLabel>Escolha o tipo</DropdownMenuLabel>
       <DropdownMenuSeparator />
       <DropdownMenuItem
-        v-for="p in PROVIDER_META"
+        v-for="p in visibleProviders"
         :key="p.value"
         :disabled="!p.available"
         class="flex flex-col items-start gap-0.5 py-2"
