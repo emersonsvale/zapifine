@@ -17,6 +17,9 @@ const saving = ref(false)
 const feedback = ref<{ kind: 'ok' | 'err'; text: string } | null>(null)
 
 const form = ref({ title: '', content_text: '' })
+const uploading = ref(false)
+const fileTitle = ref('')
+const fileInput = ref<HTMLInputElement | null>(null)
 
 function notify(kind: 'ok' | 'err', text: string) {
   feedback.value = { kind, text }
@@ -58,6 +61,38 @@ async function handleAdd() {
   }
 }
 
+async function handleUpload() {
+  const input = fileInput.value
+  const file = input?.files?.[0]
+  if (!file) {
+    notify('err', 'Selecione um arquivo')
+    return
+  }
+  if (!fileTitle.value.trim()) {
+    notify('err', 'Título obrigatório')
+    return
+  }
+  const fd = new FormData()
+  fd.append('title', fileTitle.value.trim())
+  fd.append('file', file)
+  uploading.value = true
+  try {
+    const res = await $fetch<{ chunks: number; filename: string }>('/api/ai/knowledge/upload', {
+      method: 'POST',
+      body: fd,
+    })
+    notify('ok', `${res.filename} adicionado — ${res.chunks} trecho(s)`)
+    fileTitle.value = ''
+    if (input) input.value = ''
+    await refresh()
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Erro ao fazer upload'
+    notify('err', msg)
+  } finally {
+    uploading.value = false
+  }
+}
+
 async function handleRemove(s: Source) {
   if (!confirm(`Remover "${s.title}"?`)) return
   try {
@@ -95,6 +130,38 @@ async function handleRemove(s: Source) {
     >
       {{ feedback.text }}
     </div>
+
+    <Card class="mb-4">
+      <CardHeader>
+        <div class="flex items-center gap-2">
+          <Upload class="h-4 w-4" />
+          <CardTitle class="text-base">Upload de arquivo (PDF, TXT, MD)</CardTitle>
+        </div>
+        <CardDescription>Envie documentos. O texto é extraído e chunked automaticamente.</CardDescription>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <div>
+          <Label>Título</Label>
+          <Input v-model="fileTitle" placeholder="Ex: Catálogo de produtos 2026" />
+        </div>
+        <div>
+          <Label>Arquivo</Label>
+          <input
+            ref="fileInput"
+            type="file"
+            accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown"
+            class="block w-full text-sm"
+          />
+        </div>
+        <div class="flex justify-end">
+          <Button @click="handleUpload" :disabled="uploading">
+            <Loader2 v-if="uploading" class="h-4 w-4 animate-spin" />
+            <Upload v-else class="h-4 w-4" />
+            Enviar arquivo
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
 
     <Card class="mb-6">
       <CardHeader>

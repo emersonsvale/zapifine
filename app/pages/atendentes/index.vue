@@ -78,6 +78,9 @@ async function handleRemove(agent: AiAgent) {
         </p>
       </div>
       <div class="flex gap-2">
+        <Button variant="outline" @click="navigateTo('/atendentes/metricas')">
+          Métricas
+        </Button>
         <Button variant="outline" @click="navigateTo('/atendentes/conhecimento')">
           Base de conhecimento
         </Button>
