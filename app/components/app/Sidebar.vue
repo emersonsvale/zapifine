@@ -46,7 +46,7 @@ type Entry = Item | Group
 
 const nav: Entry[] = [
   { type: 'item', to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { type: 'item', to: '/bot', label: 'Personalização do bot', icon: Bot },
+  { type: 'item', to: '/atendentes', label: 'Atendentes IA', icon: Bot },
   { type: 'item', to: '/empresa', label: 'Empresa', icon: Building2 },
   { type: 'item', to: '/conectar', label: 'Conectar', icon: PlugZap },
   {
