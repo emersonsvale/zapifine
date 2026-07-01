@@ -15,6 +15,8 @@ RUN pnpm install --frozen-lockfile
 COPY . .
 
 # Build (Nitro gera .output com node-server default)
+# --max-old-space-size=4096 evita OOM no build Nitro em containers pequenos
+ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN pnpm build
 
 # ─── Runtime stage ────────────────────────────────────────────
