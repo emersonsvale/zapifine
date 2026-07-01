@@ -77,6 +77,11 @@ async function handleRemove(agent: AiAgent) {
           Crie agentes com personalidades e funções distintas para atender seus clientes.
         </p>
       </div>
+      <div class="flex gap-2">
+        <Button variant="outline" @click="navigateTo('/atendentes/conhecimento')">
+          Base de conhecimento
+        </Button>
+      </div>
       <Dialog v-model:open="dialogOpen">
         <DialogTrigger as-child>
           <Button>
