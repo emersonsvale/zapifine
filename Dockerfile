@@ -7,16 +7,19 @@ RUN corepack enable
 
 WORKDIR /app
 
+# Força modo dev no build (ignora NODE_ENV=production externo do Coolify)
+# devDependencies (nuxt, vite, typescript) são necessárias para build
+ENV NODE_ENV=development \
+    NODE_OPTIONS=--max-old-space-size=6144 \
+    NITRO_MINIFY=false
+
 # Dependências primeiro pra cache
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile --prod=false
 
 # Código
 COPY . .
 
-# Build (Nitro gera .output com node-server default)
-# --max-old-space-size=4096 evita OOM no build Nitro em containers pequenos
-ENV NODE_OPTIONS=--max-old-space-size=4096
 RUN pnpm build
 
 # ─── Runtime stage ────────────────────────────────────────────
