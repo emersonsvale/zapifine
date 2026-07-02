@@ -253,7 +253,7 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
       :coluna-label="addColumnLabel"
     />
 
-    <LeadsEditLeadDialog
+    <LeadsLeadDrawer
       v-model:open="editOpen"
       :lead="editLead"
       :columns="columns ?? []"

@@ -1115,79 +1115,127 @@ export type Database = {
         Row: {
           avatar_fetched_at: string | null
           avatar_url: string | null
+          bairro: string | null
+          canal_preferido: string | null
+          cargo: string | null
+          cep: string | null
           cidade: string | null
+          cnpj: string | null
           coluna_id: number | null
           companies_id: string | null
+          complemento: string | null
+          cpf: string | null
           created_at: string
+          data_nascimento: string | null
           "e-mail": string | null
+          empresa: string | null
           estado: string | null
           follows_enviados: number | null
           funil_id: number | null
+          genero: string | null
           ia_ativa: boolean | null
           id: number
           nome_lead: string | null
+          numero_endereco: string | null
           numero_whatsapp_lead: string | null
           observacao: string | null
           origem: string | null
           prioridade: string | null
+          proxima_acao: string | null
+          proxima_acao_data: string | null
           remoteJid_lead: string | null
           resumo_lead: string | null
+          rua: string | null
           tags: string[] | null
+          telefone_secundario: string | null
           ultima_interacao_ia: string | null
           ultima_interacao_lead: string | null
           user_id: string | null
+          valor_negocio: number | null
           whatsapp_validado: boolean | null
         }
         Insert: {
           avatar_fetched_at?: string | null
           avatar_url?: string | null
+          bairro?: string | null
+          canal_preferido?: string | null
+          cargo?: string | null
+          cep?: string | null
           cidade?: string | null
+          cnpj?: string | null
           coluna_id?: number | null
           companies_id?: string | null
+          complemento?: string | null
+          cpf?: string | null
           created_at?: string
+          data_nascimento?: string | null
           "e-mail"?: string | null
+          empresa?: string | null
           estado?: string | null
           follows_enviados?: number | null
           funil_id?: number | null
+          genero?: string | null
           ia_ativa?: boolean | null
           id?: number
           nome_lead?: string | null
+          numero_endereco?: string | null
           numero_whatsapp_lead?: string | null
           observacao?: string | null
           origem?: string | null
           prioridade?: string | null
+          proxima_acao?: string | null
+          proxima_acao_data?: string | null
           remoteJid_lead?: string | null
           resumo_lead?: string | null
+          rua?: string | null
           tags?: string[] | null
+          telefone_secundario?: string | null
           ultima_interacao_ia?: string | null
           ultima_interacao_lead?: string | null
           user_id?: string | null
+          valor_negocio?: number | null
           whatsapp_validado?: boolean | null
         }
         Update: {
           avatar_fetched_at?: string | null
           avatar_url?: string | null
+          bairro?: string | null
+          canal_preferido?: string | null
+          cargo?: string | null
+          cep?: string | null
           cidade?: string | null
+          cnpj?: string | null
           coluna_id?: number | null
           companies_id?: string | null
+          complemento?: string | null
+          cpf?: string | null
           created_at?: string
+          data_nascimento?: string | null
           "e-mail"?: string | null
+          empresa?: string | null
           estado?: string | null
           follows_enviados?: number | null
           funil_id?: number | null
+          genero?: string | null
           ia_ativa?: boolean | null
           id?: number
           nome_lead?: string | null
+          numero_endereco?: string | null
           numero_whatsapp_lead?: string | null
           observacao?: string | null
           origem?: string | null
           prioridade?: string | null
+          proxima_acao?: string | null
+          proxima_acao_data?: string | null
           remoteJid_lead?: string | null
           resumo_lead?: string | null
+          rua?: string | null
           tags?: string[] | null
+          telefone_secundario?: string | null
           ultima_interacao_ia?: string | null
           ultima_interacao_lead?: string | null
           user_id?: string | null
+          valor_negocio?: number | null
           whatsapp_validado?: boolean | null
         }
         Relationships: [

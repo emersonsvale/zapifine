@@ -13,8 +13,7 @@ import {
   BotOff,
   Eraser,
   Trash2,
-  Eye,
-  Pencil,
+  UserRound,
   Image as ImageIcon,
   Link as LinkIcon,
   MapPin,
@@ -249,12 +248,10 @@ async function onSendRich(
 const { leads, columns, refreshLeads } = useLeads()
 const { toast, confirm } = useAlerts()
 
-const viewOpen = ref(false)
-const editOpen = ref(false)
+const drawerOpen = ref(false)
 
-watch(editOpen, async (open, wasOpen) => {
+watch(drawerOpen, async (open, wasOpen) => {
   if (!open && wasOpen) {
-    // Dialog acabou de fechar — lead pode ter sido editado/removido.
     await Promise.all([refreshLeads(), refreshConversations()])
   }
 })
@@ -265,21 +262,12 @@ const leadForDialog = computed<Lead | null>(() => {
   return leads.value?.find((l) => l.id === leadId) ?? null
 })
 
-function openLeadView() {
+function openLeadDrawer() {
   if (!leadForDialog.value) {
     toast.info('Esta conversa não está vinculada a um lead.')
     return
   }
-  viewOpen.value = true
-}
-
-function openLeadEdit() {
-  if (!leadForDialog.value) {
-    toast.info('Esta conversa não está vinculada a um lead.')
-    return
-  }
-  viewOpen.value = false
-  editOpen.value = true
+  drawerOpen.value = true
 }
 
 async function onClearMessages() {
@@ -845,13 +833,9 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               </DropdownMenuItem>
               <DropdownMenuSeparator v-if="selectedConversation?.assigned_to || !isAssignedToMe" />
               <template v-if="hasLead">
-                <DropdownMenuItem @select="openLeadView">
-                  <Eye class="h-4 w-4" />
-                  Ver lead
-                </DropdownMenuItem>
-                <DropdownMenuItem @select="openLeadEdit">
-                  <Pencil class="h-4 w-4" />
-                  Editar lead
+                <DropdownMenuItem @select="openLeadDrawer">
+                  <UserRound class="h-4 w-4" />
+                  Dados do lead
                 </DropdownMenuItem>
               </template>
               <template v-else>
@@ -1097,13 +1081,8 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       </template>
     </div>
 
-    <ChatsLeadViewDialog
-      v-model:open="viewOpen"
-      :lead="leadForDialog"
-      @edit="openLeadEdit"
-    />
-    <LeadsEditLeadDialog
-      v-model:open="editOpen"
+    <LeadsLeadDrawer
+      v-model:open="drawerOpen"
       :lead="leadForDialog"
       :columns="columns ?? []"
     />

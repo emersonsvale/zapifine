@@ -158,6 +158,22 @@ export function useLeads() {
     resumo_lead?: string | null
     coluna_id?: number | null
     tags?: string[] | null
+    cpf?: string | null
+    telefone_secundario?: string | null
+    data_nascimento?: string | null
+    genero?: string | null
+    canal_preferido?: string | null
+    empresa?: string | null
+    cargo?: string | null
+    cnpj?: string | null
+    cep?: string | null
+    rua?: string | null
+    numero_endereco?: string | null
+    complemento?: string | null
+    bairro?: string | null
+    valor_negocio?: number | null
+    proxima_acao?: string | null
+    proxima_acao_data?: string | null
   }
 
   async function updateLead(leadId: number, input: UpdateLeadInput) {
@@ -174,6 +190,22 @@ export function useLeads() {
     if (input.resumo_lead !== undefined) patch.resumo_lead = input.resumo_lead
     if (input.coluna_id !== undefined) patch.coluna_id = input.coluna_id
     if (input.tags !== undefined) patch.tags = input.tags
+    if (input.cpf !== undefined) patch.cpf = input.cpf
+    if (input.telefone_secundario !== undefined) patch.telefone_secundario = input.telefone_secundario
+    if (input.data_nascimento !== undefined) patch.data_nascimento = input.data_nascimento
+    if (input.genero !== undefined) patch.genero = input.genero
+    if (input.canal_preferido !== undefined) patch.canal_preferido = input.canal_preferido
+    if (input.empresa !== undefined) patch.empresa = input.empresa
+    if (input.cargo !== undefined) patch.cargo = input.cargo
+    if (input.cnpj !== undefined) patch.cnpj = input.cnpj
+    if (input.cep !== undefined) patch.cep = input.cep
+    if (input.rua !== undefined) patch.rua = input.rua
+    if (input.numero_endereco !== undefined) patch.numero_endereco = input.numero_endereco
+    if (input.complemento !== undefined) patch.complemento = input.complemento
+    if (input.bairro !== undefined) patch.bairro = input.bairro
+    if (input.valor_negocio !== undefined) patch.valor_negocio = input.valor_negocio
+    if (input.proxima_acao !== undefined) patch.proxima_acao = input.proxima_acao
+    if (input.proxima_acao_data !== undefined) patch.proxima_acao_data = input.proxima_acao_data
 
     const { data, error } = await supabase
       .from('leads')

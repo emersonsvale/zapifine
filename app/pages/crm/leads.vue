@@ -283,7 +283,7 @@ async function handleDelete(id: number) {
       </CardContent>
     </Card>
 
-    <LeadsEditLeadDialog
+    <LeadsLeadDrawer
       v-model:open="editOpen"
       :lead="editingLead"
       :columns="columns ?? []"
