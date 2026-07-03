@@ -45,6 +45,14 @@ export function useProducts() {
     { watch: [() => authUser.value?.id], default: () => [] },
   )
 
+  async function syncKnowledge(id: number) {
+    try {
+      await $fetch(`/api/produtos/${id}/sync-knowledge`, { method: 'POST' })
+    } catch {
+      // best effort: falha na sync não deve reverter a operação principal
+    }
+  }
+
   async function createProduct(input: {
     nome: string
     descricao?: string
@@ -62,8 +70,14 @@ export function useProducts() {
       imagem_principal: input.imagem_principal ?? null,
       ativo: true,
     }
-    const { error } = await supabase.from('produtos').insert(insert)
+    const { data, error } = await supabase
+      .from('produtos')
+      .insert(insert)
+      .select('id')
+      .single()
     if (error) throw error
+    const newId = (data as { id: number } | null)?.id
+    if (newId) void syncKnowledge(newId)
     await refresh()
   }
 
@@ -80,11 +94,13 @@ export function useProducts() {
       if (p && prev) Object.assign(p, prev)
       throw error
     }
+    void syncKnowledge(id)
   }
 
   async function deleteProduct(id: number) {
     const { error } = await supabase.from('produtos').delete().eq('id', id)
     if (error) throw error
+    void syncKnowledge(id)
     await refresh()
   }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
-import { Plus, Loader2, Trash2, ImageIcon } from 'lucide-vue-next'
+import { Plus, Loader2, Trash2, ImageIcon, BookOpen, RefreshCw } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
 type Product = Database['public']['Tables']['produtos']['Row']
@@ -82,6 +82,24 @@ const priceFmt = new Intl.NumberFormat('pt-BR', {
 function formatPrice(v: number | null) {
   return v != null ? priceFmt.format(v) : '—'
 }
+
+const syncingAll = ref(false)
+async function syncAllKnowledge() {
+  syncingAll.value = true
+  try {
+    const res = await $fetch<{ synced: number; removed: number; total: number }>(
+      '/api/produtos/sync-all',
+      { method: 'POST' },
+    )
+    toast.success(
+      `Sincronizado: ${res.synced} adicionado(s), ${res.removed} removido(s) de ${res.total}.`,
+    )
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao sincronizar.')
+  } finally {
+    syncingAll.value = false
+  }
+}
 </script>
 
 <template>
@@ -90,9 +108,28 @@ function formatPrice(v: number | null) {
       <div>
         <CardTitle class="text-2xl">Produtos/Serviços</CardTitle>
         <CardDescription>
-          Adicione seus produtos ou serviços (a IA irá sugerir estes
-          produtos/serviços aos seus leads).
+          Adicione seus produtos ou serviços. Cada item é sincronizado
+          automaticamente na base de conhecimento da IA (usada em
+          <code>buscar_conhecimento</code>), então a IA pode citá-los nos
+          atendimentos.
         </CardDescription>
+        <div class="mt-3 flex items-center gap-2 rounded-md border border-dashed bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <BookOpen class="h-3.5 w-3.5" />
+          <span>
+            Alterações salvam no CRM e reindexam na base de conhecimento em segundo plano.
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            class="ml-auto h-7 gap-1 px-2"
+            :disabled="syncingAll"
+            @click="syncAllKnowledge"
+          >
+            <Loader2 v-if="syncingAll" class="h-3.5 w-3.5 animate-spin" />
+            <RefreshCw v-else class="h-3.5 w-3.5" />
+            Ressincronizar agora
+          </Button>
+        </div>
       </div>
       <Dialog v-model:open="addOpen">
         <DialogTrigger as-child>
