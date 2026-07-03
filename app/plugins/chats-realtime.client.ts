@@ -213,6 +213,8 @@ export default defineNuxtPlugin(() => {
           if (row.status !== 'Recebida') return
 
           refreshUnread()
+          // Atualiza lista de conversas mesmo fora da rota /chats (se asyncData já foi carregado antes).
+          refreshNuxtData('conversations')
 
           const path =
             typeof window !== 'undefined' ? window.location.pathname : ''

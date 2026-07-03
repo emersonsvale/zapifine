@@ -148,6 +148,7 @@ const tabFields: Record<TabId, (keyof FormShape)[]> = {
     'data_nascimento',
     'genero',
     'canal_preferido',
+    'tagsText',
   ],
   empresa: ['empresa', 'cargo', 'cnpj'],
   endereco: ['cep', 'rua', 'numero_endereco', 'complemento', 'bairro', 'cidade', 'estado'],
@@ -155,7 +156,6 @@ const tabFields: Record<TabId, (keyof FormShape)[]> = {
     'coluna_id',
     'prioridade',
     'origem',
-    'tagsText',
     'valor_negocio',
     'proxima_acao',
     'proxima_acao_data',
@@ -178,7 +178,7 @@ const dirtyTabs = computed<Record<TabId, boolean>>(() => ({
 function buildPatchForTab(tab: TabId): Record<string, unknown> {
   const patch: Record<string, unknown> = {}
   switch (tab) {
-    case 'dados':
+    case 'dados': {
       patch.nome_lead = form.nome_lead.trim() || null
       patch.email = form.email.trim() || null
       patch.numero_whatsapp_lead = form.numero_whatsapp_lead.replace(/\D/g, '') || null
@@ -187,7 +187,10 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
       patch.data_nascimento = form.data_nascimento || null
       patch.genero = form.genero || null
       patch.canal_preferido = form.canal_preferido || null
+      const tagList = form.tagsText.split(',').map((t) => t.trim()).filter(Boolean)
+      patch.tags = tagList.length ? tagList : null
       break
+    }
     case 'empresa':
       patch.empresa = form.empresa.trim() || null
       patch.cargo = form.cargo.trim() || null
@@ -206,8 +209,6 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
       patch.coluna_id = form.coluna_id
       patch.prioridade = form.prioridade && form.prioridade !== 'none' ? form.prioridade : null
       patch.origem = form.origem.trim() || null
-      const tagList = form.tagsText.split(',').map((t) => t.trim()).filter(Boolean)
-      patch.tags = tagList.length ? tagList : null
       const n = form.valor_negocio === '' ? null : Number(form.valor_negocio)
       patch.valor_negocio = n == null || Number.isNaN(n) ? null : n
       patch.proxima_acao = form.proxima_acao.trim() || null
@@ -439,6 +440,9 @@ const colunaOptions = computed(() =>
                 </Select>
               </FieldRow>
             </div>
+            <FieldRow label="Tags" :icon="Tag">
+              <Input v-model="form.tagsText" placeholder="tag1, tag2, tag3" />
+            </FieldRow>
             <div class="flex justify-end pt-2">
               <Button
                 type="button"
@@ -557,9 +561,6 @@ const colunaOptions = computed(() =>
                 <Input v-model="form.origem" placeholder="Como nos encontrou?" />
               </FieldRow>
             </div>
-            <FieldRow label="Tags" :icon="Tag">
-              <Input v-model="form.tagsText" placeholder="tag1, tag2, tag3" />
-            </FieldRow>
             <FieldRow label="Valor do negócio" :icon="DollarSign">
               <Input v-model="form.valor_negocio" type="number" step="0.01" placeholder="0,00" inputmode="decimal" />
             </FieldRow>

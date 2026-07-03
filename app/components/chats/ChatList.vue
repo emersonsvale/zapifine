@@ -33,7 +33,14 @@ const props = defineProps<{
   pending: boolean
   currentUserId?: string | null
   currentUserSetorId?: string | null
+  tagsByLeadId?: Record<number, string[]>
 }>()
+
+function tagsFor(c: Conv): string[] {
+  const id = c.leads?.id
+  if (!id) return []
+  return props.tagsByLeadId?.[id] ?? []
+}
 
 type FilterMode = 'todas' | 'minhas' | 'sem' | 'setor'
 const filterMode = ref<FilterMode>('todas')
@@ -62,6 +69,7 @@ const filtered = computed(() => {
       c.leads?.numero_whatsapp_lead,
       c.remoteJid,
       c.setor_nome,
+      ...tagsFor(c),
     ]
       .filter(Boolean)
       .join(' ')
@@ -277,6 +285,26 @@ function previewText(c: Conv) {
                   class="ml-1 inline-flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-emerald-600 px-1.5 text-[11px] font-semibold leading-none text-white"
                 >
                   {{ c.unread_count > 99 ? '99+' : c.unread_count }}
+                </span>
+              </div>
+              <div
+                v-if="tagsFor(c).length"
+                class="mt-1 flex flex-wrap items-center gap-1"
+              >
+                <span
+                  v-for="t in tagsFor(c).slice(0, 3)"
+                  :key="t"
+                  class="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  :title="t"
+                >
+                  {{ t }}
+                </span>
+                <span
+                  v-if="tagsFor(c).length > 3"
+                  class="text-[10px] text-muted-foreground"
+                  :title="tagsFor(c).join(', ')"
+                >
+                  +{{ tagsFor(c).length - 3 }}
                 </span>
               </div>
             </div>

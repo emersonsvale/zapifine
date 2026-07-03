@@ -24,8 +24,11 @@ import {
   X,
   ArrowRightLeft,
   ChevronDown,
+  Eye,
+  CheckCircle2,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
+import { formatPhone } from '~/lib/utils'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 
@@ -245,8 +248,19 @@ async function onSendRich(
   }
 }
 
-const { leads, columns, refreshLeads } = useLeads()
+const { leads, columns, refreshLeads, moveLead } = useLeads()
 const { toast, confirm } = useAlerts()
+
+const tagsByLeadId = computed<Record<number, string[]>>(() => {
+  const out: Record<number, string[]> = {}
+  for (const l of leads.value ?? []) {
+    const tags = Array.isArray(l.tags)
+      ? l.tags.filter((t): t is string => typeof t === 'string' && !!t.trim())
+      : []
+    if (tags.length) out[l.id] = tags
+  }
+  return out
+})
 
 const drawerOpen = ref(false)
 
@@ -606,6 +620,38 @@ function handleKeydown(e: KeyboardEvent) {
   }
 }
 
+const leadTags = computed<string[]>(() => {
+  const t = leadForDialog.value?.tags
+  return Array.isArray(t) ? t.filter((x) => typeof x === 'string' && x.trim()) : []
+})
+
+const currentLeadColumnId = computed<number | null>(
+  () => leadForDialog.value?.coluna_id ?? null,
+)
+
+const funilColumnOptions = computed(() =>
+  (columns.value ?? []).filter((c) => c.id !== currentLeadColumnId.value),
+)
+
+const concludeOpen = ref(false)
+const moving = ref(false)
+
+async function onConclude(colunaId: number) {
+  const leadId = leadForDialog.value?.id
+  if (!leadId || moving.value) return
+  moving.value = true
+  concludeOpen.value = false
+  try {
+    await moveLead(leadId, colunaId)
+    const target = (columns.value ?? []).find((c) => c.id === colunaId)
+    toast.success(`Lead movido para "${target?.nome_coluna ?? 'coluna'}".`)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
+  } finally {
+    moving.value = false
+  }
+}
+
 const headerName = computed(() => {
   const c = selectedConversation.value
   if (!c) return ''
@@ -622,6 +668,12 @@ const headerNumber = computed(() => {
   if (!c) return ''
   if (c.isgrupo) return 'Grupo'
   return c.leads?.numero_whatsapp_lead ?? c.remoteJid ?? ''
+})
+const headerNumberFormatted = computed(() => {
+  const c = selectedConversation.value
+  if (!c || c.isgrupo) return ''
+  const raw = c.leads?.numero_whatsapp_lead ?? c.remoteJid ?? ''
+  return formatPhone(raw)
 })
 const headerInitial = computed(() => {
   const n = headerName.value
@@ -702,6 +754,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         :pending="convPending"
         :current-user-id="authUser?.id ?? null"
         :current-user-setor-id="currentUserSetorId"
+        :tags-by-lead-id="tagsByLeadId"
         @select="selectConversation"
       />
     </div>
@@ -765,10 +818,45 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             >
               {{ presenceLabel }}
             </p>
-            <p v-else class="truncate text-xs text-muted-foreground">
-              {{ headerNumber }}
-            </p>
+            <div v-else class="flex items-center gap-1.5 min-w-0">
+              <template v-if="leadTags.length">
+                <span
+                  v-for="t in leadTags.slice(0, 4)"
+                  :key="t"
+                  class="truncate rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground"
+                  :title="t"
+                >
+                  {{ t }}
+                </span>
+                <span
+                  v-if="leadTags.length > 4"
+                  class="text-[10px] text-muted-foreground"
+                  :title="leadTags.join(', ')"
+                >
+                  +{{ leadTags.length - 4 }}
+                </span>
+              </template>
+              <span v-else-if="!isGroupConv && !hasLead" class="truncate text-xs text-muted-foreground">
+                Sem lead vinculado
+              </span>
+              <button
+                v-if="hasLead"
+                type="button"
+                class="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded hover:bg-accent text-muted-foreground"
+                title="Ver dados do lead"
+                @click="openLeadDrawer"
+              >
+                <Eye class="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
+          <span
+            v-if="headerNumberFormatted"
+            class="hidden shrink-0 rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs text-muted-foreground md:inline-block"
+            :title="headerNumber"
+          >
+            {{ headerNumberFormatted }}
+          </span>
           <Button
             v-if="canClaim"
             variant="default"
@@ -797,6 +885,48 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               {{ iaAtiva ? 'IA ON' : 'IA OFF' }}
             </span>
           </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            class="gap-1"
+            title="Transferir atendimento"
+            @click="openTransfer('user')"
+          >
+            <ArrowRightLeft class="h-4 w-4" />
+            <span class="hidden text-xs sm:inline">Transferir</span>
+          </Button>
+          <DropdownMenu v-model:open="concludeOpen">
+            <DropdownMenuTrigger as-child>
+              <Button
+                variant="outline"
+                size="sm"
+                class="gap-1"
+                :disabled="!hasLead || moving || funilColumnOptions.length === 0"
+                :title="!hasLead ? 'Vincule um lead para concluir' : 'Mover lead para outra coluna do funil'"
+              >
+                <Loader2 v-if="moving" class="h-4 w-4 animate-spin" />
+                <CheckCircle2 v-else class="h-4 w-4" />
+                <span class="hidden text-xs sm:inline">Concluir</span>
+                <ChevronDown class="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-56">
+              <DropdownMenuLabel>Mover para</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                v-for="col in funilColumnOptions"
+                :key="col.id"
+                :disabled="moving"
+                @select="onConclude(col.id)"
+              >
+                <CheckCircle2 class="h-4 w-4 text-muted-foreground" />
+                {{ col.nome_coluna ?? `Coluna ${col.id}` }}
+              </DropdownMenuItem>
+              <DropdownMenuItem v-if="funilColumnOptions.length === 0" disabled>
+                Nenhuma coluna disponível
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button variant="ghost" size="icon" title="Ligar (em breve)" disabled>
             <Phone class="h-4 w-4" />
           </Button>
@@ -822,10 +952,6 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               >
                 <UserIcon class="h-4 w-4" />
                 Liberar conversa
-              </DropdownMenuItem>
-              <DropdownMenuItem @select="openTransfer('user')">
-                <ArrowRightLeft class="h-4 w-4" />
-                Transferir → atendente
               </DropdownMenuItem>
               <DropdownMenuItem @select="openTransfer('setor')">
                 <ArrowRightLeft class="h-4 w-4" />

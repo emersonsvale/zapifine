@@ -1060,194 +1060,229 @@ export function useChats() {
     } catch {}
   }
 
+  async function teardownThreadChannel() {
+    if (threadChannel) {
+      await supabase.removeChannel(threadChannel)
+      threadChannel = null
+    }
+  }
+
+  async function teardownPresenceChannel() {
+    if (presenceChannel) {
+      await supabase.removeChannel(presenceChannel)
+      presenceChannel = null
+    }
+    if (presenceExpireTimer) {
+      clearTimeout(presenceExpireTimer)
+      presenceExpireTimer = null
+    }
+  }
+
+  async function teardownGlobalChannel() {
+    if (globalChannel) {
+      await supabase.removeChannel(globalChannel)
+      globalChannel = null
+    }
+  }
+
+  async function setupThreadChannel(id: number) {
+    await teardownThreadChannel()
+    await syncRealtimeAuth()
+    threadChannel = supabase
+      .channel(`conv-${id}-${Math.random().toString(36).slice(2, 8)}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'whats_mensagens_conversa',
+          filter: `whats_conversa_id=eq.${id}`,
+        },
+        (payload) => {
+          if (selectedId.value !== id) return
+          const row = payload.new as Message
+          const list = messages.value ?? []
+          if (list.find((m) => m.id === row.id)) return
+          const optimisticIdx = list.findIndex(
+            (m) =>
+              typeof m.id === 'number' &&
+              m.id < 0 &&
+              m.mensagem === row.mensagem &&
+              row.status === 'Enviada',
+          )
+          if (optimisticIdx !== -1) {
+            const next = list.slice()
+            next[optimisticIdx] = row
+            messages.value = next
+          } else {
+            messages.value = [...list, row]
+          }
+          if (row.status === 'Recebida' && selectedId.value === id) {
+            markConversationSeen(id)
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'whats_mensagens_conversa',
+          filter: `whats_conversa_id=eq.${id}`,
+        },
+        (payload) => {
+          if (selectedId.value !== id) return
+          const row = payload.new as Message
+          const list = messages.value ?? []
+          const idx = list.findIndex((m) => m.id === row.id)
+          if (idx === -1) return
+          const next = list.slice()
+          next[idx] = { ...next[idx], ...row } as Message
+          messages.value = next
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[useChats] thread channel status:', status)
+        }
+      })
+  }
+
+  async function setupPresenceChannel(id: number) {
+    await teardownPresenceChannel()
+    presenceChannel = supabase
+      .channel(`presence-${id}-${Math.random().toString(36).slice(2, 8)}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'whats_presence',
+          filter: `conversa_id=eq.${id}`,
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as {
+            conversa_id: number
+            state: string | null
+            media: string | null
+            updated_at: string | null
+          }
+          if (!row) return
+          applyPresenceRow(row)
+        },
+      )
+      .subscribe()
+
+    try {
+      const { data: presRow } = await supabase
+        .from('whats_presence' as never)
+        .select('conversa_id, state, media, updated_at')
+        .eq('conversa_id', id)
+        .maybeSingle()
+      if (presRow) applyPresenceRow(presRow as never)
+    } catch {}
+  }
+
+  async function setupGlobalChannel(cid: string) {
+    await teardownGlobalChannel()
+    await syncRealtimeAuth()
+    globalChannel = supabase
+      .channel(`chats-company-${cid}-${Math.random().toString(36).slice(2, 8)}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'whats_conversa',
+          filter: `companies_id=eq.${cid}`,
+        },
+        () => {
+          refreshConversations()
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'whats_conversa',
+          filter: `companies_id=eq.${cid}`,
+        },
+        (payload) => {
+          patchConversationFromRow(payload.new as Record<string, unknown>)
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'whats_mensagens_conversa',
+        },
+        (payload) => {
+          patchConversationFromMessage(payload.new as Message)
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[useChats] company channel status:', status)
+        }
+      })
+  }
+
   if (import.meta.client) {
-    // Sync JWT no socket — postgres_changes exige auth p/ passar RLS.
     syncRealtimeAuth()
     supabase.auth.onAuthStateChange(() => {
       syncRealtimeAuth()
     })
 
-    // 1. Thread-level: messages of currently-open conversation
     watch(
       selectedId,
       async (id) => {
-        if (threadChannel) {
-          await supabase.removeChannel(threadChannel)
-          threadChannel = null
-        }
-        if (presenceChannel) {
-          await supabase.removeChannel(presenceChannel)
-          presenceChannel = null
-        }
+        await teardownThreadChannel()
+        await teardownPresenceChannel()
         presenceState.value = null
         presenceMedia.value = null
         presenceUpdatedAt.value = 0
-        if (presenceExpireTimer) {
-          clearTimeout(presenceExpireTimer)
-          presenceExpireTimer = null
-        }
         if (!id) return
-        await syncRealtimeAuth()
-        threadChannel = supabase
-          .channel(`conv-${id}-${Math.random().toString(36).slice(2, 8)}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'whats_mensagens_conversa',
-              filter: `whats_conversa_id=eq.${id}`,
-            },
-            (payload) => {
-              if (selectedId.value !== id) return
-              const row = payload.new as Message
-              const list = messages.value ?? []
-              if (list.find((m) => m.id === row.id)) return
-              // Troca optimistic (id negativo) de mesmo texto por row real.
-              const optimisticIdx = list.findIndex(
-                (m) =>
-                  typeof m.id === 'number' &&
-                  m.id < 0 &&
-                  m.mensagem === row.mensagem &&
-                  row.status === 'Enviada',
-              )
-              if (optimisticIdx !== -1) {
-                const next = list.slice()
-                next[optimisticIdx] = row
-                messages.value = next
-              } else {
-                messages.value = [...list, row]
-              }
-              // Conversa aberta: marca visto (evita unread incrementar).
-              if (row.status === 'Recebida' && selectedId.value === id) {
-                markConversationSeen(id)
-              }
-            },
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'whats_mensagens_conversa',
-              filter: `whats_conversa_id=eq.${id}`,
-            },
-            (payload) => {
-              if (selectedId.value !== id) return
-              const row = payload.new as Message
-              const list = messages.value ?? []
-              const idx = list.findIndex((m) => m.id === row.id)
-              if (idx === -1) return
-              const next = list.slice()
-              next[idx] = { ...next[idx], ...row } as Message
-              messages.value = next
-            },
-          )
-          .subscribe((status) => {
-            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.warn('[useChats] thread channel status:', status)
-            }
-          })
-
-        // Presence channel para conversa aberta
-        presenceChannel = supabase
-          .channel(`presence-${id}-${Math.random().toString(36).slice(2, 8)}`)
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'whats_presence',
-              filter: `conversa_id=eq.${id}`,
-            },
-            (payload) => {
-              const row = (payload.new ?? payload.old) as {
-                conversa_id: number
-                state: string | null
-                media: string | null
-                updated_at: string | null
-              }
-              if (!row) return
-              applyPresenceRow(row)
-            },
-          )
-          .subscribe()
-
-        // Fetch inicial do estado atual
-        try {
-          const { data: presRow } = await supabase
-            .from('whats_presence' as never)
-            .select('conversa_id, state, media, updated_at')
-            .eq('conversa_id', id)
-            .maybeSingle()
-          if (presRow) applyPresenceRow(presRow as never)
-        } catch {}
+        await setupThreadChannel(id)
+        await setupPresenceChannel(id)
       },
       { immediate: true },
     )
 
-    // 2. Company-level: new conversations + any new message (to refresh list order/preview)
     watch(
       companyId,
       async (cid) => {
-        if (globalChannel) {
-          await supabase.removeChannel(globalChannel)
-          globalChannel = null
+        if (!cid) {
+          await teardownGlobalChannel()
+          return
         }
-        if (!cid) return
-        await syncRealtimeAuth()
-        globalChannel = supabase
-          .channel(`chats-company-${cid}-${Math.random().toString(36).slice(2, 8)}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'whats_conversa',
-              filter: `companies_id=eq.${cid}`,
-            },
-            () => {
-              // Conversa nova — precisa buscar join lead + whats_conversa.
-              refreshConversations()
-            },
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'whats_conversa',
-              filter: `companies_id=eq.${cid}`,
-            },
-            (payload) => {
-              patchConversationFromRow(payload.new as Record<string, unknown>)
-            },
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'whats_mensagens_conversa',
-            },
-            (payload) => {
-              patchConversationFromMessage(payload.new as Message)
-            },
-          )
-          .subscribe((status) => {
-            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.warn('[useChats] company channel status:', status)
-            }
-          })
+        await setupGlobalChannel(cid)
       },
       { immediate: true },
     )
 
-    const onVisible = () => {
+    let onVisibleRunning = false
+    const onVisible = async () => {
       if (document.visibilityState !== 'visible') return
-      syncRealtimeAuth()
-      refreshConversations()
-      if (selectedId.value) refreshMessages()
+      if (onVisibleRunning) return
+      onVisibleRunning = true
+      try {
+        await syncRealtimeAuth()
+        // Recria canais — heartbeats podem ter caído em background (throttle Chrome).
+        const cid = companyId.value
+        const sel = selectedId.value
+        if (cid) await setupGlobalChannel(cid)
+        if (sel) {
+          await setupThreadChannel(sel)
+          await setupPresenceChannel(sel)
+        }
+        await refreshConversations()
+        if (sel) await refreshMessages()
+      } finally {
+        onVisibleRunning = false
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     window.addEventListener('focus', onVisible)
@@ -1255,10 +1290,9 @@ export function useChats() {
     onBeforeUnmount(async () => {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('focus', onVisible)
-      if (threadChannel) await supabase.removeChannel(threadChannel)
-      if (globalChannel) await supabase.removeChannel(globalChannel)
-      if (presenceChannel) await supabase.removeChannel(presenceChannel)
-      if (presenceExpireTimer) clearTimeout(presenceExpireTimer)
+      await teardownThreadChannel()
+      await teardownGlobalChannel()
+      await teardownPresenceChannel()
     })
   }
 
