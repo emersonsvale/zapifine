@@ -755,6 +755,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         :pending="convPending"
         :current-user-id="authUser?.id ?? null"
         :current-user-setor-id="currentUserSetorId"
+        :company-id="companyId"
         :tags-by-lead-id="tagsByLeadId"
         @select="selectConversation"
       />
