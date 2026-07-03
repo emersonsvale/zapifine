@@ -77,16 +77,9 @@ export default defineNuxtConfig({
     },
     clientOptions: {
       global: {
-        headers: {
-          ...(process.env.SUPABASE_GW_SECRET
-            ? { 'x-zapifine-gw': process.env.SUPABASE_GW_SECRET }
-            : {}),
-          // SSR fetches não carregam Origin automaticamente. Browsers ignoram
-          // este header (é "forbidden"), então só impacta SSR em dev.
-          ...(process.env.NODE_ENV !== 'production'
-            ? { origin: 'http://localhost:3000' }
-            : {}),
-        },
+        headers: process.env.SUPABASE_GW_SECRET
+          ? { 'x-zapifine-gw': process.env.SUPABASE_GW_SECRET }
+          : {},
       },
     },
   },

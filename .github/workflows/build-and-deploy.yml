@@ -57,6 +57,7 @@ jobs:
           build-args: |
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
             SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+            SUPABASE_GW_SECRET=${{ secrets.SUPABASE_GW_SECRET }}
             META_APP_ID=${{ secrets.META_APP_ID }}
             META_CONFIG_ID=${{ secrets.META_CONFIG_ID }}
             META_GRAPH_VERSION=${{ secrets.META_GRAPH_VERSION }}
