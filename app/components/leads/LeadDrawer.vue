@@ -36,8 +36,25 @@ const emit = defineEmits<{
   (e: 'deleted', id: number): void
 }>()
 
-const { updateLead, deleteLead, toggleIa } = useLeads()
+const { updateLead, deleteLead, toggleIa, leads: allLeads } = useLeads()
 const { toast, confirm } = useAlerts()
+
+const tagSuggestions = computed<string[]>(() => {
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const l of allLeads.value ?? []) {
+    const tags = Array.isArray(l.tags) ? l.tags : []
+    for (const t of tags) {
+      const s = typeof t === 'string' ? t.trim() : ''
+      if (!s) continue
+      const k = s.toLowerCase()
+      if (seen.has(k)) continue
+      seen.add(k)
+      out.push(s)
+    }
+  }
+  return out.sort((a, b) => a.localeCompare(b))
+})
 
 const form = reactive({
   nome_lead: '',
@@ -61,7 +78,7 @@ const form = reactive({
   coluna_id: null as number | null,
   prioridade: '',
   origem: '',
-  tagsText: '',
+  tags: [] as string[],
   valor_negocio: '',
   proxima_acao: '',
   proxima_acao_data: '',
@@ -117,7 +134,9 @@ function hydrate(l: Lead) {
     coluna_id: l.coluna_id ?? null,
     prioridade: l.prioridade ?? '',
     origem: l.origem ?? '',
-    tagsText: (l.tags ?? []).join(', '),
+    tags: Array.isArray(l.tags)
+      ? l.tags.filter((t): t is string => typeof t === 'string' && !!t.trim())
+      : [],
     valor_negocio: l.valor_negocio != null ? String(l.valor_negocio) : '',
     proxima_acao: l.proxima_acao ?? '',
     proxima_acao_data: toDatetimeLocal(l.proxima_acao_data),
@@ -148,7 +167,7 @@ const tabFields: Record<TabId, (keyof FormShape)[]> = {
     'data_nascimento',
     'genero',
     'canal_preferido',
-    'tagsText',
+    'tags',
   ],
   empresa: ['empresa', 'cargo', 'cnpj'],
   endereco: ['cep', 'rua', 'numero_endereco', 'complemento', 'bairro', 'cidade', 'estado'],
@@ -187,7 +206,7 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
       patch.data_nascimento = form.data_nascimento || null
       patch.genero = form.genero || null
       patch.canal_preferido = form.canal_preferido || null
-      const tagList = form.tagsText.split(',').map((t) => t.trim()).filter(Boolean)
+      const tagList = form.tags.map((t) => t.trim()).filter(Boolean)
       patch.tags = tagList.length ? tagList : null
       break
     }
@@ -441,7 +460,11 @@ const colunaOptions = computed(() =>
               </FieldRow>
             </div>
             <FieldRow label="Tags" :icon="Tag">
-              <Input v-model="form.tagsText" placeholder="tag1, tag2, tag3" />
+              <LeadsTagsSelect
+                v-model="form.tags"
+                :suggestions="tagSuggestions"
+                placeholder="Adicionar tags..."
+              />
             </FieldRow>
             <div class="flex justify-end pt-2">
               <Button
