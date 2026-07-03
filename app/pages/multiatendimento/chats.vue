@@ -352,8 +352,9 @@ const iaAtiva = computed(
 async function onToggleIa() {
   const leadId = selectedConversation.value?.leads?.id
   if (!leadId) return
+  const convId = selectedConversation.value?.id
   try {
-    await toggleLeadIa(leadId, !iaAtiva.value)
+    await toggleLeadIa(leadId, !iaAtiva.value, convId)
   } catch (err) {
     errorMsg.value =
       err instanceof Error ? err.message : 'Falha ao alternar IA.'

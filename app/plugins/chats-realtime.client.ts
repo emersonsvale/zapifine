@@ -216,19 +216,20 @@ export default defineNuxtPlugin(() => {
           // Atualiza lista de conversas mesmo fora da rota /chats (se asyncData já foi carregado antes).
           refreshNuxtData('conversations')
 
+          // Toca som em toda mensagem recebida, independente da rota/foco
+          playBeep()
+
           const path =
             typeof window !== 'undefined' ? window.location.pathname : ''
           const onChatsPage = path.startsWith('/multiatendimento/chats')
           const tabHidden = typeof document !== 'undefined' && document.visibilityState !== 'visible'
 
-          // Já está vendo a tela de chats com aba focada: nada a fazer
+          // Já está vendo a tela de chats com aba focada: som já rodou, sem toast/notif
           if (onChatsPage && !tabHidden) return
 
           const convId = row.whats_conversa_id
           const title = convId ? await resolveConvName(convId) : 'WhatsApp'
           const message = previewOf(row)
-
-          playBeep()
 
           // Tab em background OU outra aba aberta: usa notificação nativa do SO
           if (tabHidden) {

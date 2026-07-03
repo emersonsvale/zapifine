@@ -270,7 +270,7 @@ export function useChats() {
   })
 
   const togglingIa = ref(false)
-  async function toggleLeadIa(leadId: number, next: boolean) {
+  async function toggleLeadIa(leadId: number, next: boolean, conversaId?: number) {
     togglingIa.value = true
     const list = conversations.value ?? []
     const updated = list.map((c) =>
@@ -285,6 +285,16 @@ export function useChats() {
         .update({ ia_ativa: next } as never)
         .eq('id', leadId)
       if (error) throw error
+      if (conversaId) {
+        const path = next
+          ? `/api/ai/conversation/${conversaId}/resume`
+          : `/api/ai/conversation/${conversaId}/pause`
+        try {
+          await $fetch(path, { method: 'POST' })
+        } catch {
+          // best effort: estado por lead já foi atualizado
+        }
+      }
     } catch (err) {
       const revert = (conversations.value ?? []).map((c) =>
         c.leads && c.leads.id === leadId
