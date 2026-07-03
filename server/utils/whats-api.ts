@@ -7,9 +7,12 @@ export type WhatsApiOptions = {
 }
 
 export async function callWhatsApi<T>(_event: H3Event, path: string, opts: WhatsApiOptions = {}): Promise<T> {
-  const config = useRuntimeConfig()
-  const base = (config.whatsApiInternalUrl as string).replace(/\/+$/, '')
-  const secret = config.whatsApiInternalSecret as string
+  const base = (
+    process.env.WHATS_API_INTERNAL_URL
+    ?? process.env.WHATS_API_URL
+    ?? ''
+  ).replace(/\/+$/, '')
+  const secret = process.env.WHATS_API_INTERNAL_SECRET ?? ''
   if (!base || !secret) {
     throw createError({ statusCode: 500, statusMessage: 'whats-api internal config ausente.' })
   }

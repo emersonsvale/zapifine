@@ -2,9 +2,12 @@ import { requireCurrentUser } from '~~/server/utils/auth-company'
 
 export default defineEventHandler(async (event) => {
   const user = await requireCurrentUser(event)
-  const config = useRuntimeConfig()
-  const base = (config.whatsApiInternalUrl as string).replace(/\/+$/, '')
-  const secret = config.whatsApiInternalSecret as string
+  const base = (
+    process.env.WHATS_API_INTERNAL_URL
+    ?? process.env.WHATS_API_URL
+    ?? ''
+  ).replace(/\/+$/, '')
+  const secret = process.env.WHATS_API_INTERNAL_SECRET ?? ''
   if (!base || !secret) {
     throw createError({ statusCode: 500, statusMessage: 'whats-api internal config ausente.' })
   }
