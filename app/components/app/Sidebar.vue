@@ -34,6 +34,7 @@ type Group = {
   type: 'group'
   label: string
   icon: LucideIcon
+  to?: string
   children: Array<{
     to: string
     label: string
@@ -51,8 +52,9 @@ const nav: Entry[] = [
   { type: 'item', to: '/conectar', label: 'Conectar', icon: PlugZap },
   {
     type: 'group',
-    label: 'Multiatendimento',
+    label: 'Atendimento',
     icon: Headphones,
+    to: '/multiatendimento/chats',
     children: [
       { to: '/multiatendimento/chats', label: 'Chats', icon: MessagesSquare, minPlan: 2 },
       { to: '/multiatendimento/configuracoes', label: 'Configurações', icon: Settings, minPlan: 2 },
@@ -204,6 +206,7 @@ const upsellPlan = computed(() => {
             v-else
             :label="entry.label"
             :icon="entry.icon"
+            :to="entry.to"
             :children="entry.children"
             :collapsed="collapsed"
             @expand-sidebar="expand"

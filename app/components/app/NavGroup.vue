@@ -16,6 +16,7 @@ const props = defineProps<{
   icon: Component
   children: Child[]
   collapsed?: boolean
+  to?: string
 }>()
 
 const emit = defineEmits<{
@@ -23,6 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const route = useRoute()
+const router = useRouter()
 
 const hasActiveChild = computed(() =>
   props.children.some(
@@ -51,6 +53,12 @@ function onHeaderClick() {
   if (props.collapsed) {
     emit('expand-sidebar')
     open.value = true
+    if (props.to && route.path !== props.to) router.push(props.to)
+    return
+  }
+  if (props.to) {
+    open.value = true
+    if (route.path !== props.to) router.push(props.to)
     return
   }
   open.value = !open.value
