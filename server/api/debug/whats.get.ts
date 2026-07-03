@@ -1,11 +1,19 @@
 export default defineEventHandler(async () => {
   const config = useRuntimeConfig()
-  const base = (config.whatsApiInternalUrl as string).replace(/\/+$/, '')
-  const secret = config.whatsApiInternalSecret as string
+  const baseRuntime = (config.whatsApiInternalUrl as string ?? '').replace(/\/+$/, '')
+  const secretRuntime = (config.whatsApiInternalSecret as string) ?? ''
+  const base = (
+    process.env.WHATS_API_INTERNAL_URL
+    ?? process.env.WHATS_API_URL
+    ?? ''
+  ).replace(/\/+$/, '')
+  const secret = process.env.WHATS_API_INTERNAL_SECRET ?? ''
 
   const out: Record<string, unknown> = {
     base,
+    baseRuntime,
     secretLen: secret?.length ?? 0,
+    secretLenRuntime: secretRuntime?.length ?? 0,
   }
 
   try {
