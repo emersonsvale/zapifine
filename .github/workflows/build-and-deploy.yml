@@ -54,6 +54,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          build-args: |
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_KEY=${{ secrets.SUPABASE_KEY }}
+            META_APP_ID=${{ secrets.META_APP_ID }}
+            META_CONFIG_ID=${{ secrets.META_CONFIG_ID }}
+            META_GRAPH_VERSION=${{ secrets.META_GRAPH_VERSION }}
+            WHATS_API_URL=${{ secrets.WHATS_API_URL }}
+            VAPID_PUBLIC_KEY=${{ secrets.VAPID_PUBLIC_KEY }}
 
   deploy:
     needs: build
