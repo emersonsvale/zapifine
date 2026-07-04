@@ -99,6 +99,33 @@ const canCancel = computed(
   () => props.agendamento && !props.agendamento.is_external && props.agendamento.status_agenda !== 'Cancelado',
 )
 
+type DescPart = { type: 'text' | 'link'; value: string }
+
+const URL_RE = /(https?:\/\/[^\s<>]+)/g
+
+function stripTrailingPunct(url: string): { url: string; trail: string } {
+  const m = url.match(/[.,;:!?)\]]+$/)
+  if (!m) return { url, trail: '' }
+  return { url: url.slice(0, -m[0].length), trail: m[0] }
+}
+
+const descriptionParts = computed<DescPart[]>(() => {
+  const raw = props.agendamento?.description ?? ''
+  if (!raw) return []
+  const out: DescPart[] = []
+  let lastIdx = 0
+  for (const m of raw.matchAll(URL_RE)) {
+    const idx = m.index ?? 0
+    if (idx > lastIdx) out.push({ type: 'text', value: raw.slice(lastIdx, idx) })
+    const { url, trail } = stripTrailingPunct(m[0])
+    out.push({ type: 'link', value: url })
+    if (trail) out.push({ type: 'text', value: trail })
+    lastIdx = idx + m[0].length
+  }
+  if (lastIdx < raw.length) out.push({ type: 'text', value: raw.slice(lastIdx) })
+  return out
+})
+
 function onEdit() {
   if (!props.agendamento) return
   emit('edit', props.agendamento)
@@ -187,7 +214,16 @@ function onCancel() {
         <div v-if="agendamento.description" class="flex items-start gap-3">
           <FileText class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div class="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-            {{ agendamento.description }}
+            <template v-for="(p, i) in descriptionParts" :key="i">
+              <a
+                v-if="p.type === 'link'"
+                :href="p.value"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-sky-400 underline underline-offset-2 hover:text-sky-300"
+              >{{ p.value }}</a>
+              <template v-else>{{ p.value }}</template>
+            </template>
           </div>
         </div>
 
