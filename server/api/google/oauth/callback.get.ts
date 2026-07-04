@@ -14,7 +14,11 @@ function safeRedirectPath(input: string | undefined): string {
 }
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig(event)
+  const clientId = process.env.GOOGLE_CLIENT_ID ?? ''
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? ''
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI
+    ?? 'http://localhost:3000/api/google/oauth/callback'
   const query = getQuery(event)
 
   const error = query.error as string | undefined
@@ -36,10 +40,17 @@ export default defineEventHandler(async (event) => {
   const parsed = verifyState(state)
   const redirectTo = safeRedirectPath(parsed.redirect_to)
 
+  if (!clientId || !clientSecret) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET ausentes no .env.',
+    })
+  }
+
   const tokens = await exchangeCode({
-    clientId: config.googleClientId as string,
-    clientSecret: config.googleClientSecret as string,
-    redirectUri: config.googleRedirectUri as string,
+    clientId,
+    clientSecret,
+    redirectUri,
     code,
   }).catch((err) => {
     const e = err as { data?: { error_description?: string }; message?: string }

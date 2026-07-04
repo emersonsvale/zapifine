@@ -5,8 +5,7 @@ const STALE_AFTER_MIN = 5
 const BATCH_LIMIT = 100
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig(event)
-  const expected = config.cronSecret as string
+  const expected = process.env.CRON_SECRET ?? ''
   if (!expected) {
     throw createError({ statusCode: 503, statusMessage: 'CRON_SECRET ausente no .env.' })
   }

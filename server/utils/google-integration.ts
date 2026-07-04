@@ -54,10 +54,17 @@ export async function getIntegrationAccessToken(
     return { accessToken: data.access_token, integration: data }
   }
 
-  const config = useRuntimeConfig()
+  const clientId = process.env.GOOGLE_CLIENT_ID ?? ''
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? ''
+  if (!clientId || !clientSecret) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET ausentes no .env.',
+    })
+  }
   const refreshed = await refreshAccessToken({
-    clientId: config.googleClientId as string,
-    clientSecret: config.googleClientSecret as string,
+    clientId,
+    clientSecret,
     refreshToken: data.refresh_token,
   }).catch((err) => {
     const e = err as { data?: { error_description?: string; error?: string }; message?: string }

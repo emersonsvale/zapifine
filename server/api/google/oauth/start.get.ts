@@ -3,14 +3,15 @@ import type { Database } from '~~/types/database'
 import { buildAuthUrl, signState } from '~~/server/utils/google-oauth'
 
 export default defineEventHandler(async (event) => {
-  const config = useRuntimeConfig(event)
-  const clientId = config.googleClientId as string
-  const redirectUri = config.googleRedirectUri as string
+  const clientId = process.env.GOOGLE_CLIENT_ID ?? ''
+  const redirectUri =
+    process.env.GOOGLE_REDIRECT_URI
+    ?? 'http://localhost:3000/api/google/oauth/callback'
 
-  if (!clientId || !redirectUri) {
+  if (!clientId) {
     throw createError({
       statusCode: 500,
-      statusMessage: 'GOOGLE_CLIENT_ID/GOOGLE_REDIRECT_URI ausentes no .env.',
+      statusMessage: 'GOOGLE_CLIENT_ID ausente no .env.',
     })
   }
 
