@@ -6,6 +6,20 @@ import { syncIntegration } from '~~/server/utils/google-sync'
 type Body = { integration_id?: string; scope?: 'me' | 'company' }
 
 export default defineEventHandler(async (event) => {
+  try {
+    return await handleSync(event)
+  } catch (err) {
+    const e = err as { statusCode?: number; statusMessage?: string; message?: string; stack?: string }
+    console.error('[api/google/sync] error:', e.statusMessage ?? e.message, e.stack)
+    if (e.statusCode) throw err
+    throw createError({
+      statusCode: 500,
+      statusMessage: `sync erro: ${e.message ?? String(err)}`,
+    })
+  }
+})
+
+async function handleSync(event: Parameters<Parameters<typeof defineEventHandler>[0]>[0]) {
   const authUser = await serverSupabaseUser(event)
   if (!authUser?.id) {
     throw createError({ statusCode: 401, statusMessage: 'Não autenticado.' })
@@ -95,4 +109,4 @@ export default defineEventHandler(async (event) => {
     full_resync: fullResync,
     next_sync_token: null,
   }
-})
+}
