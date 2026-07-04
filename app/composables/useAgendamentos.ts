@@ -3,7 +3,15 @@ import type { Database } from '~~/types/database'
 type Agendamento = Database['public']['Tables']['agendamentos']['Row']
 type Lead = Database['public']['Tables']['leads']['Row']
 
-export type AgendamentoWithLead = Agendamento & { lead: Lead | null }
+export type SourceCalendarInfo = {
+  color_hex: string | null
+  summary: string | null
+} | null
+
+export type AgendamentoWithLead = Agendamento & {
+  lead: Lead | null
+  source_calendar: SourceCalendarInfo
+}
 
 export type AttendeeInput = {
   email: string
@@ -22,6 +30,7 @@ export type NovoAgendamentoInput = {
   attendees?: AttendeeInput[]
   lead_id?: number | null
   user_id?: string | null
+  google_calendar_id?: string | null
   force_outside_availability?: boolean
   send_updates?: 'all' | 'externalOnly' | 'none'
 }
@@ -113,7 +122,7 @@ export function useAgendamentos() {
       if (!companyId.value) return []
       let q = supabase
         .from('agendamentos')
-        .select('*, lead:lead_id(*)')
+        .select('*, lead:lead_id(*), source_calendar:source_calendar_id(color_hex, summary)')
         .eq('companie_id', companyId.value)
       if (!isOwner.value && userId.value) {
         q = q.eq('user_id', userId.value)

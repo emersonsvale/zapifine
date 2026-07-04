@@ -148,10 +148,16 @@ function timeLabel(iso: string | null | undefined) {
             :key="ev.id"
             class="flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px]"
             :class="ev.is_external ? 'bg-sky-500/10 border border-sky-500/30 text-sky-200/90' : 'bg-muted/40'"
-            :title="ev.is_external ? 'Evento do Google Calendar (somente leitura)' : undefined"
+            :title="ev.is_external ? `${ev.source_calendar?.summary ?? 'Google Calendar'} (somente leitura)` : undefined"
             @click.stop="onEventClick(ev)"
           >
             <span
+              v-if="ev.source_calendar?.color_hex"
+              class="h-1.5 w-1.5 shrink-0 rounded-full"
+              :style="`background:${ev.source_calendar.color_hex}`"
+            />
+            <span
+              v-else
               class="h-1.5 w-1.5 shrink-0 rounded-full"
               :class="statusDot(ev)"
             />

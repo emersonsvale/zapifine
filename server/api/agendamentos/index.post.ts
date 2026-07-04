@@ -5,7 +5,10 @@ import {
   requireMembership,
 } from '~~/server/utils/agendamentos-helpers'
 import { checkUserAvailability } from '~~/server/utils/availability-check'
-import { requireUserWriteContext } from '~~/server/utils/google-integration'
+import {
+  getIntegrationAccessToken,
+  requireUserWriteContext,
+} from '~~/server/utils/google-integration'
 import { insertEvent } from '~~/server/utils/google-calendar'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 
@@ -20,6 +23,7 @@ type Body = {
   attendees?: unknown
   lead_id?: number | null
   user_id?: string | null // atendente responsável (default = criador)
+  google_calendar_id?: string | null // id google_calendars pra override do default_write
   force_outside_availability?: boolean
   send_updates?: 'all' | 'externalOnly' | 'none'
 }
@@ -60,9 +64,47 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const { accessToken, calendar, integrationId } = await requireUserWriteContext(targetUserId)
+  let accessToken: string
+  let calendarRow: { id: string; gg_calendar_id: string }
+  let integrationId: string
 
-  const created = await insertEvent(accessToken, calendar.gg_calendar_id, {
+  if (body.google_calendar_id) {
+    const admin0 = useSupabaseAdmin()
+    const { data: chosen } = await admin0
+      .from('google_calendars')
+      .select('id, gg_calendar_id, integration_id, access_role, google_integrations!inner(user_id, companie_id, revoked_at)')
+      .eq('id', body.google_calendar_id)
+      .maybeSingle<{
+        id: string
+        gg_calendar_id: string
+        integration_id: string
+        access_role: string | null
+        google_integrations: { user_id: string; companie_id: string; revoked_at: string | null }
+      }>()
+    if (!chosen) {
+      throw createError({ statusCode: 404, statusMessage: 'Calendário escolhido não encontrado.' })
+    }
+    if (chosen.google_integrations.revoked_at) {
+      throw createError({ statusCode: 412, statusMessage: 'Integração desconectada.' })
+    }
+    if (chosen.google_integrations.user_id !== targetUserId) {
+      throw createError({ statusCode: 403, statusMessage: 'Calendário não pertence ao atendente escolhido.' })
+    }
+    if (chosen.access_role === 'reader' || chosen.access_role === 'freeBusyReader') {
+      throw createError({ statusCode: 400, statusMessage: 'Calendário é somente leitura.' })
+    }
+    const tok = await getIntegrationAccessToken(chosen.integration_id)
+    accessToken = tok.accessToken
+    calendarRow = { id: chosen.id, gg_calendar_id: chosen.gg_calendar_id }
+    integrationId = chosen.integration_id
+  } else {
+    const ctx = await requireUserWriteContext(targetUserId)
+    accessToken = ctx.accessToken
+    calendarRow = { id: ctx.calendar.id, gg_calendar_id: ctx.calendar.gg_calendar_id }
+    integrationId = ctx.integrationId
+  }
+
+  const created = await insertEvent(accessToken, calendarRow.gg_calendar_id, {
     summary: title,
     description: body.description?.trim() || undefined,
     location: body.location?.trim() || undefined,
@@ -92,7 +134,7 @@ export default defineEventHandler(async (event) => {
     user_id: targetUserId,
     lead_id: leadId,
     integration_id: integrationId,
-    source_calendar_id: calendar.id,
+    source_calendar_id: calendarRow.id,
     gg_title: created.summary ?? title,
     gg_start: created.start?.dateTime ?? startIso,
     gg_end: created.end?.dateTime ?? endIso,

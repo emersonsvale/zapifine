@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Calendar as CalIcon, List as ListIcon, Plus, RefreshCw, Clock, MessageSquare, Bug, Globe, Unplug } from 'lucide-vue-next'
+import { Calendar as CalIcon, List as ListIcon, Plus, RefreshCw, Clock, MessageSquare, Bug, Globe, Settings2 } from 'lucide-vue-next'
 import type { AgendamentoWithLead } from '~/composables/useAgendamentos'
+import type { Database } from '~~/types/database'
 
 useHead({ title: 'Agendas e Disponibilidade - Zapifine' })
 
@@ -10,11 +11,29 @@ const view = ref<View>('calendario')
 
 const { data: current } = useCurrentUser()
 const isOwner = computed(() => current.value?.funcao_user === 'OWNER')
+
+const supabase = useSupabaseClient<Database>()
+const filterUserId = ref<string>('all')
+
+const { data: companyUsers } = useAsyncData(
+  'agendas-company-users',
+  async () => {
+    if (!isOwner.value || !current.value?.companie_id) return []
+    const { data } = await supabase
+      .from('users')
+      .select('id, nome, email')
+      .eq('companie_id', current.value.companie_id)
+      .neq('status', 'Desativado')
+      .order('nome', { ascending: true })
+    return data ?? []
+  },
+  { watch: [isOwner, () => current.value?.companie_id], default: () => [] },
+)
 const dialogOpen = ref(false)
 const editDialogOpen = ref(false)
 const editing = ref<AgendamentoWithLead | null>(null)
 const syncing = ref(false)
-const disconnecting = ref(false)
+const calendariosSheetOpen = ref(false)
 
 const {
   agendamentos,
@@ -24,8 +43,14 @@ const {
   confirmEvent,
   cancelEvent,
   syncFromGoogle,
-  disconnectGoogle,
 } = useAgendamentos()
+
+const filteredAgendamentos = computed<AgendamentoWithLead[]>(() => {
+  const list = agendamentos.value ?? []
+  if (!isOwner.value) return list
+  if (filterUserId.value === 'all') return list
+  return list.filter((a) => a.user_id === filterUserId.value)
+})
 
 const { toast, confirm } = useAlerts()
 
@@ -69,26 +94,6 @@ function onEdit(ag: AgendamentoWithLead) {
   editDialogOpen.value = true
 }
 
-async function onDisconnect() {
-  const ok = await confirm({
-    title: 'Desconectar Google Calendar',
-    description:
-      'Novos agendamentos deixarão de sincronizar. Eventos já criados no Google permanecem lá. Você pode reconectar depois.',
-    confirmLabel: 'Desconectar',
-    variant: 'danger',
-  })
-  if (!ok) return
-  disconnecting.value = true
-  try {
-    await disconnectGoogle()
-    toast.success('Google Calendar desconectado.')
-  } catch (err) {
-    toast.error(err instanceof Error ? err.message : 'Falha ao desconectar.')
-  } finally {
-    disconnecting.value = false
-  }
-}
-
 async function onSync() {
   syncing.value = true
   try {
@@ -117,14 +122,9 @@ async function onSync() {
             <RefreshCw class="h-4 w-4" :class="syncing ? 'animate-spin' : ''" />
             Sincronizar
           </Button>
-          <Button
-            v-if="isOwner"
-            variant="outline"
-            :disabled="disconnecting"
-            @click="onDisconnect"
-          >
-            <Unplug class="h-4 w-4" />
-            Desconectar Google
+          <Button variant="outline" @click="calendariosSheetOpen = true">
+            <Settings2 class="h-4 w-4" />
+            Calendários
           </Button>
           <Button @click="dialogOpen = true">
             <Plus class="h-4 w-4" />
@@ -154,6 +154,24 @@ async function onSync() {
         : 'space-y-0'"
     >
       <Tabs v-model="view" class="gap-4">
+        <div v-if="isOwner && ['calendario', 'lista'].includes(view)" class="flex items-center gap-2">
+          <Select v-model="filterUserId">
+            <SelectTrigger class="h-9 w-[220px]">
+              <SelectValue placeholder="Todos os atendentes" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os atendentes</SelectItem>
+              <SelectItem
+                v-for="u in companyUsers ?? []"
+                :key="u.id"
+                :value="u.id"
+              >
+                {{ u.nome ?? u.email ?? u.id.slice(0, 8) }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         <TabsList class="h-10 p-1 flex-wrap">
           <TabsTrigger value="calendario" class="px-4">
             <CalIcon class="h-4 w-4" />
@@ -183,13 +201,13 @@ async function onSync() {
 
         <TabsContent value="calendario">
           <AgendasCalendarView
-            :agendamentos="agendamentos ?? []"
+            :agendamentos="filteredAgendamentos"
             @select="onEdit"
           />
         </TabsContent>
         <TabsContent value="lista">
           <AgendasListView
-            :agendamentos="agendamentos ?? []"
+            :agendamentos="filteredAgendamentos"
             :loading="pending"
             @edit="onEdit"
             @confirm="onConfirm($event.id)"
@@ -212,7 +230,7 @@ async function onSync() {
 
       <AgendasNotificationsPanel
         v-if="['calendario', 'lista'].includes(view)"
-        :agendamentos="agendamentos ?? []"
+        :agendamentos="filteredAgendamentos"
         @confirm="onConfirm($event.id)"
         @cancel="onCancel($event.id)"
       />
@@ -223,5 +241,6 @@ async function onSync() {
       v-model:open="editDialogOpen"
       :agendamento="editing"
     />
+    <AgendasGoogleCalendariosSheet v-model:open="calendariosSheetOpen" />
   </div>
 </template>

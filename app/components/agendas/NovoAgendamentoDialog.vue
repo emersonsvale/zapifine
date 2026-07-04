@@ -9,6 +9,25 @@ const { leads } = useLeads()
 const { createEvent } = useAgendamentos()
 const { confirm: confirmDialog } = useAlerts()
 
+const scopeMe = computed<'me'>(() => 'me')
+const { integrations: myIntegs } = useGoogleIntegrations(scopeMe)
+
+const writableCalendars = computed(() => {
+  const out: Array<{ id: string; label: string; is_default: boolean }> = []
+  for (const integ of myIntegs.value ?? []) {
+    for (const cal of integ.calendars) {
+      if (!cal.selected) continue
+      if (cal.access_role !== 'owner' && cal.access_role !== 'writer') continue
+      out.push({
+        id: cal.id,
+        label: `${cal.summary ?? cal.gg_calendar_id}${integ.gg_email ? ` · ${integ.gg_email}` : ''}`,
+        is_default: cal.default_write,
+      })
+    }
+  }
+  return out
+})
+
 const form = reactive({
   title: '',
   description: '',
@@ -18,6 +37,7 @@ const form = reactive({
   durationHours: '1',
   with_meet: false,
   lead_id: '' as string,
+  google_calendar_id: '' as string,
 })
 
 const attendees = ref<AttendeeInput[]>([])
@@ -39,6 +59,7 @@ watch(open, (v) => {
   form.durationHours = '1'
   form.with_meet = false
   form.lead_id = ''
+  form.google_calendar_id = writableCalendars.value.find((c) => c.is_default)?.id ?? ''
   attendees.value = []
   newEmail.value = ''
   newName.value = ''
@@ -161,6 +182,7 @@ async function submit() {
       with_meet: form.with_meet,
       attendees: attendees.value,
       lead_id: form.lead_id ? Number(form.lead_id) : null,
+      google_calendar_id: form.google_calendar_id || null,
       force_outside_availability: force,
     })
   }
@@ -212,6 +234,25 @@ async function submit() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        <div v-if="writableCalendars.length > 1" class="space-y-1.5">
+          <Label for="ag-calendar">Calendário destino</Label>
+          <Select v-model="form.google_calendar_id">
+            <SelectTrigger id="ag-calendar">
+              <SelectValue placeholder="Padrão" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem
+                v-for="c in writableCalendars"
+                :key="c.id"
+                :value="c.id"
+              >
+                {{ c.label }}
+                <span v-if="c.is_default" class="text-xs text-amber-400"> ★</span>
+              </SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div class="space-y-1.5">

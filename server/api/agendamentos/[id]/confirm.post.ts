@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const admin = useSupabaseAdmin()
   const { data: ag, error: exErr } = await admin
     .from('agendamentos')
-    .select('id, companie_id, lead_id, gg_start, gg_title, status_agenda')
+    .select('id, companie_id, lead_id, gg_start, gg_title, status_agenda, is_external')
     .eq('id', id)
     .maybeSingle()
 
@@ -22,6 +22,12 @@ export default defineEventHandler(async (event) => {
   }
   if (ag.companie_id !== me.companieId) {
     throw createError({ statusCode: 403, statusMessage: 'Sem permissão.' })
+  }
+  if (ag.is_external) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Evento externo do Google não pode ser confirmado no Zapifine.',
+    })
   }
   if (ag.status_agenda === 'Cancelado') {
     throw createError({
