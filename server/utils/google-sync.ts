@@ -3,6 +3,7 @@ import { getIntegrationAccessToken, listSelectedCalendars, type CalendarRow } fr
 import { listEvents, type CalendarEvent } from './google-calendar'
 
 const PAGE_LIMIT = 10
+const INITIAL_WINDOW_DAYS = 30 // sync inicial: só últimos 30d + futuros
 
 export type CalendarSyncStats = {
   calendar_id: string
@@ -37,12 +38,20 @@ async function syncOneCalendar(params: {
   let cancelled = 0
   const all: CalendarEvent[] = []
 
+  // Sync inicial (sem sync_token) usa janela temporal pra evitar puxar histórico completo.
+  // Sync incremental (com sync_token) NÃO aceita timeMin — usa delta.
+  const isInitial = !syncToken
+  const timeMin = isInitial
+    ? new Date(Date.now() - INITIAL_WINDOW_DAYS * 24 * 3600 * 1000).toISOString()
+    : undefined
+
   for (let i = 0; i < PAGE_LIMIT; i++) {
     let res
     try {
       res = await listEvents(accessToken, calendar.gg_calendar_id, {
         syncToken: pageToken ? undefined : syncToken,
         pageToken,
+        timeMin: syncToken ? undefined : timeMin,
         showDeleted: true,
         singleEvents: true,
         maxResults: 250,

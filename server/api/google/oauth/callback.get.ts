@@ -139,6 +139,7 @@ export default defineEventHandler(async (event) => {
   for (const c of calList) {
     if (c.deleted) continue
     const readonly = c.accessRole === 'reader' || c.accessRole === 'freeBusyReader'
+    if (readonly) continue
     const row = {
       integration_id: integrationId,
       gg_calendar_id: c.id,

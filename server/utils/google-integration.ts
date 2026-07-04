@@ -165,5 +165,6 @@ export async function listSelectedCalendars(integrationId: string): Promise<Cale
     .select('id, integration_id, gg_calendar_id, summary, time_zone, primary_flag, access_role, selected, default_write, sync_token, synced_at')
     .eq('integration_id', integrationId)
     .eq('selected', true)
+    .in('access_role', ['owner', 'writer'])
   return (data as CalendarRow[]) ?? []
 }
