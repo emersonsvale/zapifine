@@ -37,6 +37,7 @@ const viewing = ref<AgendamentoWithLead | null>(null)
 const syncing = ref(false)
 const calendariosSheetOpen = ref(false)
 const monthCursor = ref(new Date())
+const prefillDate = ref<string | null>(null)
 
 const {
   agendamentos,
@@ -102,6 +103,11 @@ function onSelect(ag: AgendamentoWithLead) {
   detailsOpen.value = true
 }
 
+function onNewFromDay(ymd: string) {
+  prefillDate.value = ymd
+  dialogOpen.value = true
+}
+
 async function onSync() {
   syncing.value = true
   try {
@@ -134,7 +140,7 @@ async function onSync() {
             <Settings2 class="h-4 w-4" />
             Calendários
           </Button>
-          <Button @click="dialogOpen = true">
+          <Button @click="prefillDate = null; dialogOpen = true">
             <Plus class="h-4 w-4" />
             Novo Agendamento
           </Button>
@@ -212,6 +218,7 @@ async function onSync() {
             v-model:cursor="monthCursor"
             :agendamentos="filteredAgendamentos"
             @select="onSelect"
+            @day="onNewFromDay"
           />
         </TabsContent>
         <TabsContent value="lista">
@@ -246,7 +253,10 @@ async function onSync() {
       />
     </div>
 
-    <AgendasNovoAgendamentoDialog v-model:open="dialogOpen" />
+    <AgendasNovoAgendamentoDialog
+      v-model:open="dialogOpen"
+      :prefill-date="prefillDate"
+    />
     <AgendasEditarAgendamentoDialog
       v-model:open="editDialogOpen"
       :agendamento="editing"

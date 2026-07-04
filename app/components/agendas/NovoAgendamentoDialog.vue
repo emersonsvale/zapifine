@@ -8,6 +8,7 @@ const open = defineModel<boolean>('open', { default: false })
 const props = defineProps<{
   prefillLeadId?: number | null
   prefillTitle?: string | null
+  prefillDate?: string | null
 }>()
 
 const { leads } = useLeads()
@@ -59,8 +60,8 @@ watch(open, (v) => {
   form.title = props.prefillTitle ?? ''
   form.description = ''
   form.location = ''
-  form.startDate = ''
-  form.startTime = ''
+  form.startDate = props.prefillDate ?? ''
+  form.startTime = props.prefillDate ? '09:00' : ''
   form.durationHours = '1'
   form.with_meet = false
   form.lead_id = ''

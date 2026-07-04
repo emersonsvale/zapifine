@@ -23,7 +23,7 @@ const colorLegend = computed(() => {
 
 const emit = defineEmits<{
   (e: 'select', ag: AgendamentoWithLead): void
-  (e: 'day', iso: string): void
+  (e: 'day', ymd: string): void
 }>()
 
 const mesNome = computed(() =>
@@ -86,6 +86,11 @@ function next() {
   cursor.value = d
 }
 
+function toYmd(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
 function statusDot(ev: AgendamentoWithLead) {
   if (ev.is_external) return 'bg-sky-400'
   if (ev.status_agenda === 'Confirmado') return 'bg-emerald-400'
@@ -141,7 +146,7 @@ function timeLabel(iso: string | null | undefined) {
             ? 'outline outline-2 -outline-offset-2 outline-emerald-500/80'
             : '',
         ]"
-        @click="emit('day', d.toISOString())"
+        @click="emit('day', toYmd(d))"
       >
         <span
           class="self-end text-xs font-semibold"
