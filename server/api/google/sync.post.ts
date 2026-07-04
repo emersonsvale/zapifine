@@ -12,9 +12,10 @@ export default defineEventHandler(async (event) => {
     const e = err as { statusCode?: number; statusMessage?: string; message?: string; stack?: string }
     console.error('[api/google/sync] error:', e.statusMessage ?? e.message, e.stack)
     if (e.statusCode) throw err
+    const firstStackLine = (e.stack ?? '').split('\n').slice(0, 4).join(' | ')
     throw createError({
       statusCode: 500,
-      statusMessage: `sync erro: ${e.message ?? String(err)}`,
+      statusMessage: `sync erro: ${e.message ?? String(err)} @ ${firstStackLine}`,
     })
   }
 })
