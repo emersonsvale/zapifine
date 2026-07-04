@@ -1,17 +1,57 @@
 <script setup lang="ts">
-import { Calendar, Trash2, CheckCircle2, ExternalLink, Pencil } from 'lucide-vue-next'
+import { computed } from 'vue'
+import {
+  Calendar,
+  Trash2,
+  CheckCircle2,
+  ExternalLink,
+  Pencil,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-vue-next'
 import type { AgendamentoWithLead } from '~/composables/useAgendamentos'
 
-defineProps<{
+const props = defineProps<{
   agendamentos: AgendamentoWithLead[]
   loading: boolean
 }>()
+
+const cursor = defineModel<Date>('cursor', { required: true })
 
 const emit = defineEmits<{
   (e: 'confirm', ag: AgendamentoWithLead): void
   (e: 'cancel', ag: AgendamentoWithLead): void
   (e: 'edit', ag: AgendamentoWithLead): void
 }>()
+
+const mesNome = computed(() =>
+  new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(cursor.value),
+)
+
+const agendamentosDoMes = computed(() => {
+  const y = cursor.value.getFullYear()
+  const m = cursor.value.getMonth()
+  return props.agendamentos.filter((a) => {
+    if (!a.gg_start) return false
+    const d = new Date(a.gg_start)
+    if (Number.isNaN(d.getTime())) return false
+    return d.getFullYear() === y && d.getMonth() === m
+  })
+})
+
+function prev() {
+  const d = new Date(cursor.value)
+  d.setMonth(d.getMonth() - 1)
+  cursor.value = d
+}
+function next() {
+  const d = new Date(cursor.value)
+  d.setMonth(d.getMonth() + 1)
+  cursor.value = d
+}
 
 function fmtDateTime(iso: string | null) {
   if (!iso) return '00/00/0000'
@@ -41,6 +81,16 @@ function statusLabel(ag: AgendamentoWithLead) {
 
 <template>
   <Card class="overflow-hidden p-0">
+    <div class="flex items-center justify-between border-b px-4 py-3">
+      <Button variant="ghost" size="icon" @click="prev">
+        <ChevronLeft class="h-4 w-4" />
+      </Button>
+      <p class="text-xl font-semibold capitalize">{{ mesNome }}</p>
+      <Button variant="ghost" size="icon" @click="next">
+        <ChevronRight class="h-4 w-4" />
+      </Button>
+    </div>
+
     <div
       class="grid grid-cols-[1.1fr_1.1fr_2fr_1fr_160px] gap-3 border-b bg-muted/20 px-5 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
     >
@@ -59,7 +109,7 @@ function statusLabel(ag: AgendamentoWithLead) {
     </div>
 
     <div
-      v-else-if="!agendamentos.length"
+      v-else-if="!agendamentosDoMes.length"
       class="flex flex-col items-center justify-center gap-2 py-16 text-sm text-muted-foreground"
     >
       <div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted/40">
@@ -70,7 +120,7 @@ function statusLabel(ag: AgendamentoWithLead) {
 
     <ul v-else class="divide-y">
       <li
-        v-for="ag in agendamentos"
+        v-for="ag in agendamentosDoMes"
         :key="ag.id"
         class="grid grid-cols-[1.1fr_1.1fr_2fr_1fr_160px] items-center gap-3 px-5 py-3 text-sm"
       >

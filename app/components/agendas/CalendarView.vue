@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import type { AgendamentoWithLead } from '~/composables/useAgendamentos'
 
 const props = defineProps<{
   agendamentos: AgendamentoWithLead[]
 }>()
+
+const cursor = defineModel<Date>('cursor', { required: true })
 
 const colorLegend = computed(() => {
   const map = new Map<string, { color: string; summary: string }>()
@@ -23,8 +25,6 @@ const emit = defineEmits<{
   (e: 'select', ag: AgendamentoWithLead): void
   (e: 'day', iso: string): void
 }>()
-
-const cursor = ref(new Date())
 
 const mesNome = computed(() =>
   new Intl.DateTimeFormat('pt-BR', {
@@ -94,10 +94,6 @@ function statusDot(ev: AgendamentoWithLead) {
 }
 
 function onEventClick(ev: AgendamentoWithLead) {
-  if (ev.is_external) {
-    if (ev.gg_link) window.open(ev.gg_link, '_blank')
-    return
-  }
   emit('select', ev)
 }
 

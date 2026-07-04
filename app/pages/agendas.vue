@@ -32,8 +32,11 @@ const { data: companyUsers } = useAsyncData(
 const dialogOpen = ref(false)
 const editDialogOpen = ref(false)
 const editing = ref<AgendamentoWithLead | null>(null)
+const detailsOpen = ref(false)
+const viewing = ref<AgendamentoWithLead | null>(null)
 const syncing = ref(false)
 const calendariosSheetOpen = ref(false)
+const monthCursor = ref(new Date())
 
 const {
   agendamentos,
@@ -92,6 +95,11 @@ function onEdit(ag: AgendamentoWithLead) {
   }
   editing.value = ag
   editDialogOpen.value = true
+}
+
+function onSelect(ag: AgendamentoWithLead) {
+  viewing.value = ag
+  detailsOpen.value = true
 }
 
 async function onSync() {
@@ -201,12 +209,14 @@ async function onSync() {
 
         <TabsContent value="calendario">
           <AgendasCalendarView
+            v-model:cursor="monthCursor"
             :agendamentos="filteredAgendamentos"
-            @select="onEdit"
+            @select="onSelect"
           />
         </TabsContent>
         <TabsContent value="lista">
           <AgendasListView
+            v-model:cursor="monthCursor"
             :agendamentos="filteredAgendamentos"
             :loading="pending"
             @edit="onEdit"
@@ -240,6 +250,13 @@ async function onSync() {
     <AgendasEditarAgendamentoDialog
       v-model:open="editDialogOpen"
       :agendamento="editing"
+    />
+    <AgendasDetalhesAgendamentoDialog
+      v-model:open="detailsOpen"
+      :agendamento="viewing"
+      @edit="onEdit"
+      @confirm="onConfirm($event.id)"
+      @cancel="onCancel($event.id)"
     />
     <AgendasGoogleCalendariosSheet v-model:open="calendariosSheetOpen" />
   </div>
