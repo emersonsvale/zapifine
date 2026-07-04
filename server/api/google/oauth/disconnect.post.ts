@@ -2,6 +2,7 @@ import { serverSupabaseUser, serverSupabaseClient } from '#supabase/server'
 import type { Database } from '~~/types/database'
 import { revokeToken } from '~~/server/utils/google-oauth'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
+import { unregisterCalendarWatch } from '~~/server/utils/google-watch'
 
 type Body = { integration_id?: string }
 
@@ -49,6 +50,16 @@ export default defineEventHandler(async (event) => {
   for (const integ of integs) {
     if (integ.companie_id !== me.companie_id) continue
     if (integ.user_id !== authUser.id && !isOwner) continue
+
+    // Encerra watches antes de revogar token (precisa access token válido)
+    const { data: cals } = await admin
+      .from('google_calendars')
+      .select('id')
+      .eq('integration_id', integ.id)
+      .not('watch_channel_id', 'is', null)
+    for (const c of cals ?? []) {
+      await unregisterCalendarWatch(c.id).catch(() => {})
+    }
 
     if (integ.refresh_token) {
       await revokeToken(integ.refresh_token)

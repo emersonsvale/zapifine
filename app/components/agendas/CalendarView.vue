@@ -7,6 +7,18 @@ const props = defineProps<{
   agendamentos: AgendamentoWithLead[]
 }>()
 
+const colorLegend = computed(() => {
+  const map = new Map<string, { color: string; summary: string }>()
+  for (const ag of props.agendamentos) {
+    const c = ag.source_calendar
+    if (!c?.color_hex || !c.summary) continue
+    if (!map.has(c.color_hex)) {
+      map.set(c.color_hex, { color: c.color_hex, summary: c.summary })
+    }
+  }
+  return Array.from(map.values())
+})
+
 const emit = defineEmits<{
   (e: 'select', ag: AgendamentoWithLead): void
   (e: 'day', iso: string): void
@@ -174,6 +186,21 @@ function timeLabel(iso: string | null | undefined) {
           </span>
         </div>
       </button>
+    </div>
+
+    <div
+      v-if="colorLegend.length"
+      class="flex flex-wrap items-center gap-3 border-t border-border/60 px-4 py-2 text-[11px] text-muted-foreground"
+    >
+      <span class="uppercase tracking-wide">Calendários:</span>
+      <span
+        v-for="c in colorLegend"
+        :key="c.color"
+        class="inline-flex items-center gap-1.5"
+      >
+        <span class="h-2 w-2 rounded-full" :style="`background:${c.color}`" />
+        {{ c.summary }}
+      </span>
     </div>
   </Card>
 </template>

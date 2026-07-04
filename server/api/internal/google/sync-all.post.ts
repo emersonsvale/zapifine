@@ -1,5 +1,6 @@
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 import { syncIntegration } from '~~/server/utils/google-sync'
+import { registerCalendarWatch } from '~~/server/utils/google-watch'
 
 const STALE_AFTER_MIN = 5
 const BATCH_LIMIT = 100
@@ -74,9 +75,24 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Renova watches expirando nas próximas 24h (registerCalendarWatch encerra o antigo)
+  const renewCutoff = new Date(Date.now() + 24 * 3600_000).toISOString()
+  const { data: expiring } = await admin
+    .from('google_calendars')
+    .select('id')
+    .eq('selected', true)
+    .not('watch_channel_id', 'is', null)
+    .lt('watch_expires_at', renewCutoff)
+    .limit(50)
+  const renewed = (expiring ?? []).length
+  for (const c of expiring ?? []) {
+    await registerCalendarWatch(c.id).catch(() => {})
+  }
+
   return {
     ok: true,
     processed: results.length,
     results,
+    watches_renewed: renewed,
   }
 })

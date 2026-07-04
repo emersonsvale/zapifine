@@ -1,5 +1,6 @@
 import { useSupabaseAdmin } from './supabase-admin'
 import { refreshAccessToken } from './google-oauth'
+import { createInAppNotification } from './notifications-internal'
 
 const REFRESH_BUFFER_SEC = 60
 
@@ -66,16 +67,26 @@ export async function getIntegrationAccessToken(
     clientId,
     clientSecret,
     refreshToken: data.refresh_token,
-  }).catch((err) => {
+  }).catch(async (err) => {
     const e = err as { data?: { error_description?: string; error?: string }; message?: string }
     const desc = e.data?.error_description ?? e.message ?? 'erro desconhecido'
     if (e.data?.error === 'invalid_grant') {
       // refresh_token revogado pelo user no Google
-      admin
+      await admin
         .from('google_integrations')
         .update({ revoked_at: new Date().toISOString() })
         .eq('id', integrationId)
-        .then(() => {})
+      await createInAppNotification({
+        userId: data.user_id,
+        companyId: data.companie_id,
+        title: 'Google Calendar desconectado',
+        message: `A integração com ${data.gg_email ?? 'sua conta Google'} foi revogada. Reconecte em Agendas → Calendários.`,
+        tipo: 'alerta',
+        referenceId: integrationId,
+        referenceType: 'google_integration',
+      }).catch((notifErr) => {
+        console.warn('[google-integration] notify fail:', notifErr)
+      })
     }
     throw createError({
       statusCode: 502,

@@ -1501,6 +1501,10 @@ export type Database = {
           synced_at: string | null
           time_zone: string | null
           updated_at: string
+          watch_channel_id: string | null
+          watch_expires_at: string | null
+          watch_resource_id: string | null
+          watch_token: string | null
         }
         Insert: {
           access_role?: string | null
@@ -1518,6 +1522,10 @@ export type Database = {
           synced_at?: string | null
           time_zone?: string | null
           updated_at?: string
+          watch_channel_id?: string | null
+          watch_expires_at?: string | null
+          watch_resource_id?: string | null
+          watch_token?: string | null
         }
         Update: {
           access_role?: string | null
@@ -1535,6 +1543,10 @@ export type Database = {
           synced_at?: string | null
           time_zone?: string | null
           updated_at?: string
+          watch_channel_id?: string | null
+          watch_expires_at?: string | null
+          watch_resource_id?: string | null
+          watch_token?: string | null
         }
         Relationships: [
           {

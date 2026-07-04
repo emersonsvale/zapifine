@@ -5,7 +5,7 @@ import {
   requireMembership,
 } from '~~/server/utils/agendamentos-helpers'
 import { getIntegrationAccessToken } from '~~/server/utils/google-integration'
-import { patchEvent } from '~~/server/utils/google-calendar'
+import { patchEvent, moveEvent } from '~~/server/utils/google-calendar'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 import type { Database } from '~~/types/database'
 
@@ -20,6 +20,7 @@ type Body = {
   timezone?: string | null
   attendees?: unknown
   lead_id?: number | null
+  google_calendar_id?: string | null
   send_updates?: 'all' | 'externalOnly' | 'none'
 }
 
@@ -114,7 +115,7 @@ export default defineEventHandler(async (event) => {
 
   const { data: srcCal } = await admin
     .from('google_calendars')
-    .select('gg_calendar_id')
+    .select('id, gg_calendar_id, integration_id')
     .eq('id', existing.source_calendar_id)
     .maybeSingle()
   if (!srcCal) {
@@ -122,7 +123,36 @@ export default defineEventHandler(async (event) => {
   }
 
   const { accessToken } = await getIntegrationAccessToken(existing.integration_id)
-  const updated = await patchEvent(accessToken, srcCal.gg_calendar_id, id, {
+
+  // Move entre calendars (mesma integration apenas)
+  let effectiveCalId = srcCal.gg_calendar_id
+  if (
+    body.google_calendar_id
+    && body.google_calendar_id !== existing.source_calendar_id
+  ) {
+    const { data: destCal } = await admin
+      .from('google_calendars')
+      .select('id, gg_calendar_id, integration_id, access_role')
+      .eq('id', body.google_calendar_id)
+      .maybeSingle()
+    if (!destCal) {
+      throw createError({ statusCode: 404, statusMessage: 'Calendário destino não encontrado.' })
+    }
+    if (destCal.integration_id !== srcCal.integration_id) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'Só é possível mover entre calendários da mesma conta Google.',
+      })
+    }
+    if (destCal.access_role === 'reader' || destCal.access_role === 'freeBusyReader') {
+      throw createError({ statusCode: 400, statusMessage: 'Calendário destino é somente leitura.' })
+    }
+    await moveEvent(accessToken, srcCal.gg_calendar_id, id, destCal.gg_calendar_id, body.send_updates ?? 'none')
+    effectiveCalId = destCal.gg_calendar_id
+    dbPatch.source_calendar_id = destCal.id
+  }
+
+  const updated = await patchEvent(accessToken, effectiveCalId, id, {
     summary: patch.summary as string | undefined,
     description: patch.description as string | undefined,
     location: patch.location as string | undefined,

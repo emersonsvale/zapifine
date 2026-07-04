@@ -211,6 +211,23 @@ export async function patchEvent(
   )
 }
 
+export async function moveEvent(
+  accessToken: string,
+  fromCalendarId: string,
+  eventId: string,
+  toCalendarId: string,
+  sendUpdates: 'all' | 'externalOnly' | 'none' = 'none',
+): Promise<CalendarEvent> {
+  return gfetch<CalendarEvent>(
+    `/calendars/${encodeURIComponent(fromCalendarId)}/events/${encodeURIComponent(eventId)}/move`,
+    {
+      accessToken,
+      method: 'POST',
+      query: { destination: toCalendarId, sendUpdates },
+    },
+  )
+}
+
 export async function deleteEvent(
   accessToken: string,
   calendarId: string,
@@ -252,6 +269,50 @@ export type ListEventsResponse = {
   items: CalendarEvent[]
   nextPageToken?: string
   nextSyncToken?: string
+}
+
+// ============================================================================
+// Watch channels (push notifications)
+// ============================================================================
+
+export type WatchChannelResponse = {
+  kind: 'api#channel'
+  id: string
+  resourceId: string
+  resourceUri: string
+  token?: string
+  expiration?: string // millis epoch como string
+}
+
+export async function startWatch(
+  accessToken: string,
+  calendarId: string,
+  body: { id: string; address: string; token?: string; ttl?: number },
+): Promise<WatchChannelResponse> {
+  const params: Record<string, unknown> = {
+    id: body.id,
+    type: 'web_hook',
+    address: body.address,
+  }
+  if (body.token) params.token = body.token
+  if (body.ttl) params.params = { ttl: String(body.ttl) }
+
+  return gfetch<WatchChannelResponse>(
+    `/calendars/${encodeURIComponent(calendarId)}/events/watch`,
+    { accessToken, method: 'POST', body: params },
+  )
+}
+
+export async function stopWatch(
+  accessToken: string,
+  channelId: string,
+  resourceId: string,
+): Promise<void> {
+  await gfetch<void>('/channels/stop', {
+    accessToken,
+    method: 'POST',
+    body: { id: channelId, resourceId },
+  })
 }
 
 export async function listEvents(

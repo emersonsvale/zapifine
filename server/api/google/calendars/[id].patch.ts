@@ -1,6 +1,7 @@
 import { serverSupabaseUser, serverSupabaseClient } from '#supabase/server'
 import type { Database } from '~~/types/database'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
+import { registerCalendarWatch, unregisterCalendarWatch } from '~~/server/utils/google-watch'
 
 type Body = { selected?: boolean; default_write?: boolean }
 type CalendarPatch = Database['public']['Tables']['google_calendars']['Update']
@@ -83,6 +84,15 @@ export default defineEventHandler(async (event) => {
     .eq('id', id)
   if (upErr) {
     throw createError({ statusCode: 500, statusMessage: upErr.message })
+  }
+
+  // Sincroniza watch com nova seleção
+  if (typeof body.selected === 'boolean') {
+    if (body.selected) {
+      registerCalendarWatch(id).catch(() => {})
+    } else {
+      unregisterCalendarWatch(id).catch(() => {})
+    }
   }
 
   return { ok: true, id, changed: true }

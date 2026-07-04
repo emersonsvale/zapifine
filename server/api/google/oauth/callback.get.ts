@@ -6,6 +6,7 @@ import {
 } from '~~/server/utils/google-oauth'
 import { listCalendarList } from '~~/server/utils/google-calendar'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
+import { registerCalendarWatch } from '~~/server/utils/google-watch'
 
 function safeRedirectPath(input: string | undefined): string {
   if (!input) return '/agendas'
@@ -163,6 +164,19 @@ export default defineEventHandler(async (event) => {
         .eq('integration_id', integrationId)
         .eq('gg_calendar_id', c.id)
     }
+  }
+
+  // Registra watches nos calendars selected+gravável (fire-and-forget)
+  const { data: toWatch } = await admin
+    .from('google_calendars')
+    .select('id')
+    .eq('integration_id', integrationId)
+    .eq('selected', true)
+    .in('access_role', ['owner', 'writer'])
+  for (const c of toWatch ?? []) {
+    registerCalendarWatch(c.id).catch((err) => {
+      console.warn('[oauth/callback] watch fail:', err)
+    })
   }
 
   await sendRedirect(event, `${redirectTo}?google=connected`, 302)

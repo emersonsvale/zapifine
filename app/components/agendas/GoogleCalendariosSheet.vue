@@ -87,6 +87,21 @@ function accessRoleLabel(r: string | null) {
   if (r === 'freeBusyReader') return 'Free/Busy'
   return r ?? '—'
 }
+
+function relativeTime(iso: string | null) {
+  if (!iso) return 'nunca'
+  const t = new Date(iso).getTime()
+  if (Number.isNaN(t)) return 'nunca'
+  const diff = Date.now() - t
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return `há ${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `há ${m}min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `há ${h}h`
+  const d = Math.floor(h / 24)
+  return `há ${d}d`
+}
 </script>
 
 <template>
@@ -181,18 +196,23 @@ function accessRoleLabel(r: string | null) {
               :key="cal.id"
               class="flex items-center justify-between gap-2 rounded-md border border-transparent px-2 py-1.5 hover:bg-muted/40"
             >
-              <div class="flex min-w-0 items-center gap-2">
-                <span
-                  class="h-2.5 w-2.5 shrink-0 rounded-full"
-                  :style="cal.color_hex ? `background:${cal.color_hex}` : ''"
-                  :class="!cal.color_hex ? 'bg-muted-foreground' : ''"
-                />
-                <span class="truncate text-sm" :title="cal.gg_calendar_id">
-                  {{ cal.summary ?? cal.gg_calendar_id }}
-                  <span v-if="cal.primary_flag" class="text-xs text-amber-400">•</span>
-                </span>
-                <span class="hidden shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground sm:inline">
-                  {{ accessRoleLabel(cal.access_role) }}
+              <div class="flex min-w-0 flex-col gap-0.5">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span
+                    class="h-2.5 w-2.5 shrink-0 rounded-full"
+                    :style="cal.color_hex ? `background:${cal.color_hex}` : ''"
+                    :class="!cal.color_hex ? 'bg-muted-foreground' : ''"
+                  />
+                  <span class="truncate text-sm" :title="cal.gg_calendar_id">
+                    {{ cal.summary ?? cal.gg_calendar_id }}
+                    <span v-if="cal.primary_flag" class="text-xs text-amber-400">•</span>
+                  </span>
+                  <span class="hidden shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground sm:inline">
+                    {{ accessRoleLabel(cal.access_role) }}
+                  </span>
+                </div>
+                <span class="pl-4 text-[10px] text-muted-foreground">
+                  Sincronizado {{ relativeTime(cal.synced_at) }}
                 </span>
               </div>
               <div class="flex shrink-0 items-center gap-1">

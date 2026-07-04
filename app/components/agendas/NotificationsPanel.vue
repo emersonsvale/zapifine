@@ -16,7 +16,7 @@ const busy = ref<Record<string, 'confirm' | 'cancel' | null>>({})
 
 const pendentes = computed(() =>
   props.agendamentos
-    .filter((a) => (a.status_agenda ?? 'Pendente') === 'Pendente')
+    .filter((a) => !a.is_external && (a.status_agenda ?? 'Pendente') === 'Pendente')
     .slice(0, 20),
 )
 
