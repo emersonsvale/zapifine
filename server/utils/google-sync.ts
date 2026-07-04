@@ -3,7 +3,8 @@ import { getIntegrationAccessToken, listSelectedCalendars, type CalendarRow } fr
 import { listEvents, type CalendarEvent } from './google-calendar'
 
 const PAGE_LIMIT = 10
-const INITIAL_WINDOW_DAYS = 30 // sync inicial: só últimos 30d + futuros
+const INITIAL_WINDOW_PAST_DAYS = 30
+const INITIAL_WINDOW_FUTURE_DAYS = 90
 
 export type CalendarSyncStats = {
   calendar_id: string
@@ -38,11 +39,15 @@ async function syncOneCalendar(params: {
   let cancelled = 0
   const all: CalendarEvent[] = []
 
-  // Sync inicial (sem sync_token) usa janela temporal pra evitar puxar histórico completo.
-  // Sync incremental (com sync_token) NÃO aceita timeMin — usa delta.
+  // Sync inicial (sem sync_token) usa janela temporal pra evitar puxar histórico completo
+  // e recorrentes até 2099. Sync incremental (com sync_token) NÃO aceita timeMin/Max.
   const isInitial = !syncToken
+  const now = Date.now()
   const timeMin = isInitial
-    ? new Date(Date.now() - INITIAL_WINDOW_DAYS * 24 * 3600 * 1000).toISOString()
+    ? new Date(now - INITIAL_WINDOW_PAST_DAYS * 86400000).toISOString()
+    : undefined
+  const timeMax = isInitial
+    ? new Date(now + INITIAL_WINDOW_FUTURE_DAYS * 86400000).toISOString()
     : undefined
 
   for (let i = 0; i < PAGE_LIMIT; i++) {
@@ -52,6 +57,7 @@ async function syncOneCalendar(params: {
         syncToken: pageToken ? undefined : syncToken,
         pageToken,
         timeMin: syncToken ? undefined : timeMin,
+        timeMax: syncToken ? undefined : timeMax,
         showDeleted: true,
         singleEvents: true,
         maxResults: 250,
@@ -93,17 +99,19 @@ async function syncOneCalendar(params: {
     }
 
     const ext = ev.extendedProperties?.private ?? {}
-    const userIdFromExt = typeof ext.zapifine_user_id === 'string' ? ext.zapifine_user_id : userId
+    const zapifineUserId = typeof ext.zapifine_user_id === 'string' ? ext.zapifine_user_id : null
     const leadIdFromExt = typeof ext.zapifine_lead_id === 'string' ? Number(ext.zapifine_lead_id) : null
+    const isExternal = !zapifineUserId
 
     const { error } = await admin
       .from('agendamentos')
       .upsert({
         id: ev.id,
         companie_id: companieId,
-        user_id: userIdFromExt,
+        user_id: zapifineUserId ?? userId,
         integration_id: integrationId,
         source_calendar_id: calendar.id,
+        is_external: isExternal,
         lead_id: Number.isFinite(leadIdFromExt) ? leadIdFromExt : null,
         gg_title: ev.summary ?? null,
         gg_start: ev.start?.dateTime ?? (ev.start?.date ? new Date(ev.start.date).toISOString() : null),

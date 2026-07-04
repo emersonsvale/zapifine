@@ -105,19 +105,25 @@ export function useAgendamentos() {
     }
   }
 
+  const isOwner = computed(() => current.value?.funcao_user === 'OWNER')
+
   const { data, refresh, pending } = useAsyncData<AgendamentoWithLead[]>(
     'agendamentos',
     async () => {
       if (!companyId.value) return []
-      const { data, error } = await supabase
+      let q = supabase
         .from('agendamentos')
         .select('*, lead:lead_id(*)')
         .eq('companie_id', companyId.value)
+      if (!isOwner.value && userId.value) {
+        q = q.eq('user_id', userId.value)
+      }
+      const { data, error } = await q
         .order('gg_start', { ascending: true, nullsFirst: false })
       if (error) throw error
       return (data as AgendamentoWithLead[]) ?? []
     },
-    { watch: [companyId], default: () => [] },
+    { watch: [companyId, userId, isOwner], default: () => [] },
   )
 
   async function createEvent(input: NovoAgendamentoInput) {

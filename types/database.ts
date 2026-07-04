@@ -342,6 +342,7 @@ export type Database = {
           gg_title: string | null
           id: string
           integration_id: string | null
+          is_external: boolean
           lead_id: number | null
           location: string | null
           meet_link: string | null
@@ -362,6 +363,7 @@ export type Database = {
           gg_title?: string | null
           id: string
           integration_id?: string | null
+          is_external?: boolean
           lead_id?: number | null
           location?: string | null
           meet_link?: string | null
@@ -382,6 +384,7 @@ export type Database = {
           gg_title?: string | null
           id?: string
           integration_id?: string | null
+          is_external?: boolean
           lead_id?: number | null
           location?: string | null
           meet_link?: string | null
@@ -3220,6 +3223,7 @@ export type Database = {
           unread_count: number
         }[]
       }
+      cron_google_sync: { Args: never; Returns: undefined }
       current_company_id: { Args: never; Returns: string }
       dashboard_stats: { Args: { p_company_id: string }; Returns: Json }
       empresas_vencem_hoje: {

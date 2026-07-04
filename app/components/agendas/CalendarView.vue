@@ -74,10 +74,19 @@ function next() {
   cursor.value = d
 }
 
-function statusDot(s: string | null | undefined) {
-  if (s === 'Confirmado') return 'bg-emerald-400'
-  if (s === 'Cancelado') return 'bg-red-400'
+function statusDot(ev: AgendamentoWithLead) {
+  if (ev.is_external) return 'bg-sky-400'
+  if (ev.status_agenda === 'Confirmado') return 'bg-emerald-400'
+  if (ev.status_agenda === 'Cancelado') return 'bg-red-400'
   return 'bg-amber-400'
+}
+
+function onEventClick(ev: AgendamentoWithLead) {
+  if (ev.is_external) {
+    if (ev.gg_link) window.open(ev.gg_link, '_blank')
+    return
+  }
+  emit('select', ev)
 }
 
 function timeLabel(iso: string | null | undefined) {
@@ -137,12 +146,14 @@ function timeLabel(iso: string | null | undefined) {
           <div
             v-for="ev in eventsForDay(d).slice(0, 3)"
             :key="ev.id"
-            class="flex items-center gap-1 truncate rounded bg-muted/40 px-1.5 py-0.5 text-[11px]"
-            @click.stop="emit('select', ev)"
+            class="flex items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11px]"
+            :class="ev.is_external ? 'bg-sky-500/10 border border-sky-500/30 text-sky-200/90' : 'bg-muted/40'"
+            :title="ev.is_external ? 'Evento do Google Calendar (somente leitura)' : undefined"
+            @click.stop="onEventClick(ev)"
           >
             <span
               class="h-1.5 w-1.5 shrink-0 rounded-full"
-              :class="statusDot(ev.status_agenda)"
+              :class="statusDot(ev)"
             />
             <span class="truncate">
               <span class="font-semibold">{{ timeLabel(ev.gg_start) }}</span>

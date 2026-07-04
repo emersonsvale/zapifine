@@ -26,10 +26,16 @@ function fmtDateTime(iso: string | null) {
   })
 }
 
-function statusClass(s: string | null | undefined) {
-  if (s === 'Confirmado') return 'bg-emerald-500/15 text-emerald-300'
-  if (s === 'Cancelado') return 'bg-red-500/15 text-red-300'
+function statusClass(ag: AgendamentoWithLead) {
+  if (ag.is_external) return 'bg-sky-500/15 text-sky-300'
+  if (ag.status_agenda === 'Confirmado') return 'bg-emerald-500/15 text-emerald-300'
+  if (ag.status_agenda === 'Cancelado') return 'bg-red-500/15 text-red-300'
   return 'bg-amber-500/15 text-amber-300'
+}
+
+function statusLabel(ag: AgendamentoWithLead) {
+  if (ag.is_external) return 'Google'
+  return ag.status_agenda ?? 'Pendente'
 }
 </script>
 
@@ -80,9 +86,9 @@ function statusClass(s: string | null | undefined) {
         <span>
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-            :class="statusClass(ag.status_agenda)"
+            :class="statusClass(ag)"
           >
-            {{ ag.status_agenda ?? 'Pendente' }}
+            {{ statusLabel(ag) }}
           </span>
         </span>
         <div class="flex items-center justify-end gap-1">
@@ -97,36 +103,38 @@ function statusClass(s: string | null | undefined) {
               <ExternalLink class="h-4 w-4" />
             </a>
           </Button>
-          <Button
-            v-if="ag.status_agenda !== 'Cancelado'"
-            variant="ghost"
-            size="icon"
-            title="Editar"
-            @click="emit('edit', ag)"
-          >
-            <Pencil class="h-4 w-4" />
-          </Button>
-          <Button
-            v-if="
-              ag.status_agenda !== 'Confirmado' &&
-              ag.status_agenda !== 'Cancelado'
-            "
-            variant="ghost"
-            size="icon"
-            title="Confirmar"
-            @click="emit('confirm', ag)"
-          >
-            <CheckCircle2 class="h-4 w-4 text-emerald-400" />
-          </Button>
-          <Button
-            v-if="ag.status_agenda !== 'Cancelado'"
-            variant="ghost"
-            size="icon"
-            title="Cancelar"
-            @click="emit('cancel', ag)"
-          >
-            <Trash2 class="h-4 w-4 text-destructive" />
-          </Button>
+          <template v-if="!ag.is_external">
+            <Button
+              v-if="ag.status_agenda !== 'Cancelado'"
+              variant="ghost"
+              size="icon"
+              title="Editar"
+              @click="emit('edit', ag)"
+            >
+              <Pencil class="h-4 w-4" />
+            </Button>
+            <Button
+              v-if="
+                ag.status_agenda !== 'Confirmado' &&
+                ag.status_agenda !== 'Cancelado'
+              "
+              variant="ghost"
+              size="icon"
+              title="Confirmar"
+              @click="emit('confirm', ag)"
+            >
+              <CheckCircle2 class="h-4 w-4 text-emerald-400" />
+            </Button>
+            <Button
+              v-if="ag.status_agenda !== 'Cancelado'"
+              variant="ghost"
+              size="icon"
+              title="Cancelar"
+              @click="emit('cancel', ag)"
+            >
+              <Trash2 class="h-4 w-4 text-destructive" />
+            </Button>
+          </template>
         </div>
       </li>
     </ul>

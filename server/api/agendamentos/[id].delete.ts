@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const admin = useSupabaseAdmin()
   const { data: existing, error: exErr } = await admin
     .from('agendamentos')
-    .select('id, companie_id, status_agenda, integration_id, source_calendar_id')
+    .select('id, companie_id, status_agenda, integration_id, source_calendar_id, is_external')
     .eq('id', id)
     .maybeSingle()
 
@@ -28,6 +28,12 @@ export default defineEventHandler(async (event) => {
   }
   if (existing.companie_id !== me.companieId) {
     throw createError({ statusCode: 403, statusMessage: 'Sem permissão.' })
+  }
+  if (existing.is_external) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Evento externo do Google. Exclua direto no Google Calendar.',
+    })
   }
 
   if (existing.status_agenda !== 'Cancelado' && existing.integration_id && existing.source_calendar_id) {

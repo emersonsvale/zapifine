@@ -36,7 +36,7 @@ export default defineEventHandler(async (event) => {
   // Verifica que o agendamento pertence à empresa do usuário
   const { data: existing, error: exErr } = await admin
     .from('agendamentos')
-    .select('id, companie_id, user_id, status_agenda, integration_id, source_calendar_id')
+    .select('id, companie_id, user_id, status_agenda, integration_id, source_calendar_id, is_external')
     .eq('id', id)
     .maybeSingle()
 
@@ -45,6 +45,12 @@ export default defineEventHandler(async (event) => {
   }
   if (existing.companie_id !== me.companieId) {
     throw createError({ statusCode: 403, statusMessage: 'Sem permissão.' })
+  }
+  if (existing.is_external) {
+    throw createError({
+      statusCode: 403,
+      statusMessage: 'Evento externo do Google. Edite direto no Google Calendar.',
+    })
   }
   if (existing.status_agenda === 'Cancelado') {
     throw createError({ statusCode: 409, statusMessage: 'Agendamento cancelado não pode ser editado.' })
