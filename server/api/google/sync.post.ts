@@ -12,10 +12,9 @@ export default defineEventHandler(async (event) => {
     const e = err as { statusCode?: number; statusMessage?: string; message?: string; stack?: string }
     console.error('[api/google/sync] error:', e.statusMessage ?? e.message, e.stack)
     if (e.statusCode) throw err
-    const firstStackLine = (e.stack ?? '').split('\n').slice(0, 4).join(' | ')
     throw createError({
       statusCode: 500,
-      statusMessage: `sync erro: ${e.message ?? String(err)} @ ${firstStackLine}`,
+      statusMessage: `sync erro: ${e.message ?? String(err)}`,
     })
   }
 })
@@ -36,7 +35,8 @@ async function handleSync(event: Parameters<Parameters<typeof defineEventHandler
     throw createError({ statusCode: 403, statusMessage: 'Sem empresa vinculada.' })
   }
 
-  const body = await readBody<Body>(event).catch(() => ({} as Body))
+  const rawBody = await readBody<Body>(event).catch(() => null)
+  const body: Body = rawBody && typeof rawBody === 'object' ? rawBody : {}
   const admin = useSupabaseAdmin()
 
   let integrationIds: string[] = []

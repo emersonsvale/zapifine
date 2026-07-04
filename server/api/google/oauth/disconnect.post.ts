@@ -22,7 +22,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Sem empresa vinculada.' })
   }
 
-  const body: Body = await readBody<Body>(event).catch(() => ({} as Body))
+  const rawBody = await readBody<Body>(event).catch(() => null)
+  const body: Body = rawBody && typeof rawBody === 'object' ? rawBody : {}
   const admin = useSupabaseAdmin()
   const isOwner = me.funcao_user === 'OWNER'
 
