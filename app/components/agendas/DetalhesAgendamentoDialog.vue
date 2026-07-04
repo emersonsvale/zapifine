@@ -120,11 +120,11 @@ function onCancel() {
 
 <template>
   <Dialog v-model:open="open">
-    <DialogContent class="sm:max-w-xl">
+    <DialogContent class="flex max-h-[90vh] flex-col sm:max-w-xl">
       <DialogHeader>
         <div class="flex items-start justify-between gap-3">
-          <div class="space-y-1">
-            <DialogTitle class="text-xl">
+          <div class="min-w-0 space-y-1">
+            <DialogTitle class="break-words text-xl">
               {{ agendamento?.gg_title ?? 'Agendamento' }}
             </DialogTitle>
             <span
@@ -137,7 +137,7 @@ function onCancel() {
         </div>
       </DialogHeader>
 
-      <div v-if="agendamento" class="space-y-4 text-sm">
+      <div v-if="agendamento" class="min-w-0 flex-1 space-y-4 overflow-y-auto pr-1 text-sm">
         <div class="flex items-start gap-3">
           <Clock class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div class="capitalize">{{ fmtRange(agendamento.gg_start, agendamento.gg_end) }}</div>
@@ -157,12 +157,12 @@ function onCancel() {
 
         <div v-if="agendamento.location" class="flex items-start gap-3">
           <MapPin class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div>{{ agendamento.location }}</div>
+          <div class="min-w-0 break-words">{{ agendamento.location }}</div>
         </div>
 
         <div v-if="agendamento.lead" class="flex items-start gap-3">
           <User class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div>
+          <div class="min-w-0 break-words">
             {{ agendamento.lead.nome_lead ?? `Lead #${agendamento.lead.id}` }}
             <span v-if="agendamento.lead['e-mail']" class="text-muted-foreground">
               · {{ agendamento.lead['e-mail'] }}
@@ -186,7 +186,9 @@ function onCancel() {
 
         <div v-if="agendamento.description" class="flex items-start gap-3">
           <FileText class="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-          <div class="whitespace-pre-wrap">{{ agendamento.description }}</div>
+          <div class="min-w-0 flex-1 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+            {{ agendamento.description }}
+          </div>
         </div>
 
         <div
