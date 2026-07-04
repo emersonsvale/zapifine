@@ -210,6 +210,13 @@ export type Database = {
             foreignKeyName: "agenda_lembretes_whatsapp_connection_id_fkey"
             columns: ["whatsapp_connection_id"]
             isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["whatsapp_id"]
+          },
+          {
+            foreignKeyName: "agenda_lembretes_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
+            isOneToOne: false
             referencedRelation: "whatsapp_connections"
             referencedColumns: ["id"]
           },
@@ -334,9 +341,11 @@ export type Database = {
           gg_start: string | null
           gg_title: string | null
           id: string
+          integration_id: string | null
           lead_id: number | null
           location: string | null
           meet_link: string | null
+          source_calendar_id: string | null
           status_agenda:
             | Database["public"]["Enums"]["enum_status_agenda"]
             | null
@@ -352,9 +361,11 @@ export type Database = {
           gg_start?: string | null
           gg_title?: string | null
           id: string
+          integration_id?: string | null
           lead_id?: number | null
           location?: string | null
           meet_link?: string | null
+          source_calendar_id?: string | null
           status_agenda?:
             | Database["public"]["Enums"]["enum_status_agenda"]
             | null
@@ -370,9 +381,11 @@ export type Database = {
           gg_start?: string | null
           gg_title?: string | null
           id?: string
+          integration_id?: string | null
           lead_id?: number | null
           location?: string | null
           meet_link?: string | null
+          source_calendar_id?: string | null
           status_agenda?:
             | Database["public"]["Enums"]["enum_status_agenda"]
             | null
@@ -402,10 +415,24 @@ export type Database = {
             referencedColumns: ["company_id"]
           },
           {
+            foreignKeyName: "agendamentos_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "google_integrations"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "agendamentos_lead_id_fkey"
             columns: ["lead_id"]
             isOneToOne: false
             referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agendamentos_source_calendar_id_fkey"
+            columns: ["source_calendar_id"]
+            isOneToOne: false
+            referencedRelation: "google_calendars"
             referencedColumns: ["id"]
           },
           {
@@ -424,6 +451,331 @@ export type Database = {
           },
         ]
       }
+      ai_agent_tools: {
+        Row: {
+          agent_id: string
+          config: Json
+          tool_slug: string
+        }
+        Insert: {
+          agent_id: string
+          config?: Json
+          tool_slug: string
+        }
+        Update: {
+          agent_id?: string
+          config?: Json
+          tool_slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_tools_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agents: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          model: string
+          nome: string
+          system_prompt: string
+          temperature: number | null
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          model?: string
+          nome: string
+          system_prompt: string
+          temperature?: number | null
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          model?: string
+          nome?: string
+          system_prompt?: string
+          temperature?: number | null
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "ai_agents_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+        ]
+      }
+      ai_connection_binding: {
+        Row: {
+          group_trigger_prefix: string
+          orchestrator_agent_id: string
+          updated_at: string
+          whatsapp_connection_id: string
+        }
+        Insert: {
+          group_trigger_prefix?: string
+          orchestrator_agent_id: string
+          updated_at?: string
+          whatsapp_connection_id: string
+        }
+        Update: {
+          group_trigger_prefix?: string
+          orchestrator_agent_id?: string
+          updated_at?: string
+          whatsapp_connection_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_connection_binding_orchestrator_agent_id_fkey"
+            columns: ["orchestrator_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_connection_binding_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
+            isOneToOne: true
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["whatsapp_id"]
+          },
+          {
+            foreignKeyName: "ai_connection_binding_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
+            isOneToOne: true
+            referencedRelation: "whatsapp_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_conversation_state: {
+        Row: {
+          conversa_id: number
+          is_paused: boolean
+          last_run_at: string | null
+          last_summary: string | null
+          last_summary_msg_id: string | null
+          paused_at: string | null
+          paused_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          conversa_id: number
+          is_paused?: boolean
+          last_run_at?: string | null
+          last_summary?: string | null
+          last_summary_msg_id?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          conversa_id?: number
+          is_paused?: boolean
+          last_run_at?: string | null
+          last_summary?: string | null
+          last_summary_msg_id?: string | null
+          paused_at?: string | null
+          paused_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_conversation_state_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: true
+            referencedRelation: "whats_conversa"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_knowledge_base: {
+        Row: {
+          chunk_index: number | null
+          company_id: string
+          content_text: string
+          created_at: string
+          embedding: string | null
+          id: string
+          metadata: Json
+          source_ref: string | null
+          source_type: string | null
+        }
+        Insert: {
+          chunk_index?: number | null
+          company_id: string
+          content_text: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source_ref?: string | null
+          source_type?: string | null
+        }
+        Update: {
+          chunk_index?: number | null
+          company_id?: string
+          content_text?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          metadata?: Json
+          source_ref?: string | null
+          source_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_knowledge_base_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_knowledge_base_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "ai_knowledge_base_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+        ]
+      }
+      ai_run_log: {
+        Row: {
+          agent_id: string | null
+          company_id: string
+          completion_tokens: number | null
+          conversa_id: number | null
+          cost_usd: number | null
+          created_at: string
+          error: string | null
+          id: string
+          latency_ms: number | null
+          prompt_tokens: number | null
+          role: string | null
+          tools_called: Json | null
+        }
+        Insert: {
+          agent_id?: string | null
+          company_id: string
+          completion_tokens?: number | null
+          conversa_id?: number | null
+          cost_usd?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          prompt_tokens?: number | null
+          role?: string | null
+          tools_called?: Json | null
+        }
+        Update: {
+          agent_id?: string | null
+          company_id?: string
+          completion_tokens?: number | null
+          conversa_id?: number | null
+          cost_usd?: number | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          latency_ms?: number | null
+          prompt_tokens?: number | null
+          role?: string | null
+          tools_called?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_run_log_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_run_log_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "whats_conversa"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_specialist_bindings: {
+        Row: {
+          orchestrator_id: string
+          specialist_id: string
+          when_use_hint: string
+        }
+        Insert: {
+          orchestrator_id: string
+          specialist_id: string
+          when_use_hint: string
+        }
+        Update: {
+          orchestrator_id?: string
+          specialist_id?: string
+          when_use_hint?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_specialist_bindings_orchestrator_id_fkey"
+            columns: ["orchestrator_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_specialist_bindings_specialist_id_fkey"
+            columns: ["specialist_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       app: {
         Row: {
           created_at: string
@@ -439,6 +791,24 @@ export type Database = {
           created_at?: string
           id?: number
           versao?: string | null
+        }
+        Relationships: []
+      }
+      app_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: string
         }
         Relationships: []
       }
@@ -1111,6 +1481,149 @@ export type Database = {
           },
         ]
       }
+      google_calendars: {
+        Row: {
+          access_role: string | null
+          color_hex: string | null
+          created_at: string
+          default_write: boolean
+          description: string | null
+          gg_calendar_id: string
+          id: string
+          integration_id: string
+          primary_flag: boolean
+          selected: boolean
+          summary: string | null
+          sync_token: string | null
+          synced_at: string | null
+          time_zone: string | null
+          updated_at: string
+        }
+        Insert: {
+          access_role?: string | null
+          color_hex?: string | null
+          created_at?: string
+          default_write?: boolean
+          description?: string | null
+          gg_calendar_id: string
+          id?: string
+          integration_id: string
+          primary_flag?: boolean
+          selected?: boolean
+          summary?: string | null
+          sync_token?: string | null
+          synced_at?: string | null
+          time_zone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          access_role?: string | null
+          color_hex?: string | null
+          created_at?: string
+          default_write?: boolean
+          description?: string | null
+          gg_calendar_id?: string
+          id?: string
+          integration_id?: string
+          primary_flag?: boolean
+          selected?: boolean
+          summary?: string | null
+          sync_token?: string | null
+          synced_at?: string | null
+          time_zone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_calendars_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "google_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_integrations: {
+        Row: {
+          access_token: string | null
+          companie_id: string
+          created_at: string
+          gg_email: string | null
+          gg_sub: string | null
+          id: string
+          refresh_token: string
+          revoked_at: string | null
+          scopes: string[] | null
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          companie_id: string
+          created_at?: string
+          gg_email?: string | null
+          gg_sub?: string | null
+          id?: string
+          refresh_token: string
+          revoked_at?: string | null
+          scopes?: string[] | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          companie_id?: string
+          created_at?: string
+          gg_email?: string | null
+          gg_sub?: string | null
+          id?: string
+          refresh_token?: string
+          revoked_at?: string | null
+          scopes?: string[] | null
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_integrations_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_integrations_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "google_integrations_companie_id_fkey"
+            columns: ["companie_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "google_integrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "google_integrations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       leads: {
         Row: {
           avatar_fetched_at: string | null
@@ -1706,6 +2219,9 @@ export type Database = {
           companie_id: string | null
           created_at: string
           fechado: boolean | null
+          ia_cost_usd: number
+          ia_tokens_input: number
+          ia_tokens_output: number
           id: number
           mensagens_excedentes: number | null
           mes: string | null
@@ -1717,6 +2233,9 @@ export type Database = {
           companie_id?: string | null
           created_at?: string
           fechado?: boolean | null
+          ia_cost_usd?: number
+          ia_tokens_input?: number
+          ia_tokens_output?: number
           id?: number
           mensagens_excedentes?: number | null
           mes?: string | null
@@ -1728,6 +2247,9 @@ export type Database = {
           companie_id?: string | null
           created_at?: string
           fechado?: boolean | null
+          ia_cost_usd?: number
+          ia_tokens_input?: number
+          ia_tokens_output?: number
           id?: number
           mensagens_excedentes?: number | null
           mes?: string | null
@@ -1814,6 +2336,64 @@ export type Database = {
           {
             foreignKeyName: "produtos_companies_id_fkey"
             columns: ["companies_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
+          },
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          company_id: string | null
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          auth: string
+          company_id?: string | null
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          auth?: string
+          company_id?: string | null
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "push_subscriptions_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "vw_user_dashboard"
             referencedColumns: ["company_id"]
@@ -2123,39 +2703,18 @@ export type Database = {
             referencedRelation: "vw_user_dashboard"
             referencedColumns: ["user_id"]
           },
-        ]
-      }
-      whats_participantes: {
-        Row: {
-          avatar_fetched_at: string | null
-          avatar_url: string | null
-          companies_id: string
-          jid: string
-          nome: string | null
-          updated_at: string
-        }
-        Insert: {
-          avatar_fetched_at?: string | null
-          avatar_url?: string | null
-          companies_id: string
-          jid: string
-          nome?: string | null
-          updated_at?: string
-        }
-        Update: {
-          avatar_fetched_at?: string | null
-          avatar_url?: string | null
-          companies_id?: string
-          jid?: string
-          nome?: string | null
-          updated_at?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "whats_participantes_companies_id_fkey"
-            columns: ["companies_id"]
+            foreignKeyName: "whats_conversa_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
             isOneToOne: false
-            referencedRelation: "companies"
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["whatsapp_id"]
+          },
+          {
+            foreignKeyName: "whats_conversa_whatsapp_connection_id_fkey"
+            columns: ["whatsapp_connection_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_connections"
             referencedColumns: ["id"]
           },
         ]
@@ -2235,6 +2794,55 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "whats_conversa"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      whats_participantes: {
+        Row: {
+          avatar_fetched_at: string | null
+          avatar_url: string | null
+          companies_id: string
+          jid: string
+          nome: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
+          companies_id: string
+          jid: string
+          nome?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_fetched_at?: string | null
+          avatar_url?: string | null
+          companies_id?: string
+          jid?: string
+          nome?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whats_participantes_companies_id_fkey"
+            columns: ["companies_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whats_participantes_companies_id_fkey"
+            columns: ["companies_id"]
+            isOneToOne: false
+            referencedRelation: "vw_bots_empresa"
+            referencedColumns: ["company_id"]
+          },
+          {
+            foreignKeyName: "whats_participantes_companies_id_fkey"
+            columns: ["companies_id"]
+            isOneToOne: false
+            referencedRelation: "vw_user_dashboard"
+            referencedColumns: ["company_id"]
           },
         ]
       }
@@ -2573,6 +3181,19 @@ export type Database = {
       }
     }
     Functions: {
+      ai_search_knowledge: {
+        Args: {
+          p_company_id: string
+          p_match_count?: number
+          p_query_embedding: string
+        }
+        Returns: {
+          chunk_index: number
+          content_text: string
+          distance: number
+          source_ref: string
+        }[]
+      }
       chat_list: {
         Args: { p_company_id: string }
         Returns: {
@@ -2600,6 +3221,7 @@ export type Database = {
         }[]
       }
       current_company_id: { Args: never; Returns: string }
+      dashboard_stats: { Args: { p_company_id: string }; Returns: Json }
       empresas_vencem_hoje: {
         Args: never
         Returns: {
@@ -2624,6 +3246,40 @@ export type Database = {
       transferir_conversa_user: {
         Args: { p_conversa_id: number; p_nota?: string; p_to_user_id: string }
         Returns: Json
+      }
+      upsert_whats_conversa: {
+        Args: {
+          p_company_id: string
+          p_grupo_nome?: string
+          p_isgrupo?: boolean
+          p_lead_id?: number
+          p_remote_jid: string
+          p_user_id?: string
+          p_whatsapp_connection_id: string
+        }
+        Returns: {
+          assigned_at: string | null
+          assigned_to: string | null
+          avatar_fetched_at: string | null
+          avatar_url: string | null
+          companies_id: string | null
+          created_at: string
+          grupoNome: string | null
+          id: number
+          isgrupo: boolean | null
+          last_read_at: string | null
+          lead_id: number | null
+          remoteJid: string | null
+          setor_id: string | null
+          user_id: string | null
+          whatsapp_connection_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "whats_conversa"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {

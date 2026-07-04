@@ -5,7 +5,7 @@ import {
   requireMembership,
 } from '~~/server/utils/agendamentos-helpers'
 import { checkUserAvailability } from '~~/server/utils/availability-check'
-import { getCompanyAccessToken } from '~~/server/utils/google-token'
+import { requireUserWriteContext } from '~~/server/utils/google-integration'
 import { insertEvent } from '~~/server/utils/google-calendar'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 
@@ -60,9 +60,9 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const { accessToken, calendarId } = await getCompanyAccessToken(me.companieId)
+  const { accessToken, calendar, integrationId } = await requireUserWriteContext(targetUserId)
 
-  const created = await insertEvent(accessToken, calendarId, {
+  const created = await insertEvent(accessToken, calendar.gg_calendar_id, {
     summary: title,
     description: body.description?.trim() || undefined,
     location: body.location?.trim() || undefined,
@@ -91,6 +91,8 @@ export default defineEventHandler(async (event) => {
     companie_id: me.companieId,
     user_id: targetUserId,
     lead_id: leadId,
+    integration_id: integrationId,
+    source_calendar_id: calendar.id,
     gg_title: created.summary ?? title,
     gg_start: created.start?.dateTime ?? startIso,
     gg_end: created.end?.dateTime ?? endIso,

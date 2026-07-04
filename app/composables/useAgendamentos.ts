@@ -70,14 +70,26 @@ function asMessage(err: unknown): string {
 export function useAgendamentos() {
   const supabase = useSupabaseClient<Database>()
   const { data: current } = useCurrentUser()
-  const { company } = useCompany()
 
   const companyId = computed(() => current.value?.companie_id ?? null)
   const userId = computed(() => current.value?.id ?? null)
 
-  const isGoogleConnected = computed(
-    () => !!company.value?.gg_access_token,
+  const { data: myIntegrations, refresh: refreshIntegrations } = useAsyncData(
+    'my-google-integrations',
+    async () => {
+      if (!userId.value) return [] as Array<{ id: string }>
+      const { data, error } = await supabase
+        .from('google_integrations')
+        .select('id')
+        .eq('user_id', userId.value)
+        .is('revoked_at', null)
+      if (error) return []
+      return (data ?? []) as Array<{ id: string }>
+    },
+    { watch: [userId], default: () => [] },
   )
+
+  const isGoogleConnected = computed(() => (myIntegrations.value?.length ?? 0) > 0)
 
   const googleConnectUrl = computed(() => {
     if (!userId.value) return null
@@ -85,7 +97,12 @@ export function useAgendamentos() {
   })
 
   async function disconnectGoogle() {
-    await $fetch('/api/google/oauth/disconnect', { method: 'POST' })
+    try {
+      await $fetch('/api/google/oauth/disconnect', { method: 'POST' })
+      await refreshIntegrations()
+    } catch (err) {
+      throw new Error(asMessage(err))
+    }
   }
 
   const { data, refresh, pending } = useAsyncData<AgendamentoWithLead[]>(

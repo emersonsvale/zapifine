@@ -111,6 +111,44 @@ export async function getCalendar(
   })
 }
 
+export type CalendarListEntry = {
+  id: string
+  summary?: string
+  summaryOverride?: string
+  description?: string
+  timeZone?: string
+  primary?: boolean
+  accessRole?: 'owner' | 'writer' | 'reader' | 'freeBusyReader'
+  backgroundColor?: string
+  selected?: boolean
+  deleted?: boolean
+}
+
+export type CalendarListResponse = {
+  items: CalendarListEntry[]
+  nextPageToken?: string
+}
+
+export async function listCalendarList(
+  accessToken: string,
+): Promise<CalendarListEntry[]> {
+  const all: CalendarListEntry[] = []
+  let pageToken: string | undefined = undefined
+  for (let i = 0; i < 5; i++) {
+    const res: CalendarListResponse = await gfetch<CalendarListResponse>(
+      '/users/me/calendarList',
+      {
+        accessToken,
+        query: { pageToken, maxResults: 250, showHidden: false, showDeleted: false },
+      },
+    )
+    all.push(...res.items)
+    if (!res.nextPageToken) break
+    pageToken = res.nextPageToken
+  }
+  return all
+}
+
 // ============================================================================
 // Events
 // ============================================================================

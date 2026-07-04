@@ -1,36 +1,34 @@
 import { useSupabaseAdmin } from './supabase-admin'
-import { getCompanyAccessToken } from './google-token'
+import { getIntegrationAccessToken, listSelectedCalendars, type CalendarRow } from './google-integration'
 import { listEvents, type CalendarEvent } from './google-calendar'
 
 const PAGE_LIMIT = 10
 
-export type SyncStats = {
+export type CalendarSyncStats = {
+  calendar_id: string
+  gg_calendar_id: string
   fetched: number
   upserted: number
   cancelled: number
   full_resync: boolean
-  next_sync_token: string | null
 }
 
-export async function syncCompanyEvents(companyId: string): Promise<SyncStats> {
+export type IntegrationSyncStats = {
+  integration_id: string
+  calendars: CalendarSyncStats[]
+}
+
+async function syncOneCalendar(params: {
+  accessToken: string
+  integrationId: string
+  companieId: string
+  userId: string
+  calendar: CalendarRow
+}): Promise<CalendarSyncStats> {
   const admin = useSupabaseAdmin()
+  const { accessToken, integrationId, companieId, userId, calendar } = params
 
-  const { data: company } = await admin
-    .from('companies')
-    .select('gg_sync_token, gg_calendar_id')
-    .eq('id', companyId)
-    .maybeSingle()
-
-  if (!company?.gg_calendar_id) {
-    throw createError({
-      statusCode: 412,
-      statusMessage: 'Google Calendar não conectado.',
-    })
-  }
-
-  const { accessToken, calendarId } = await getCompanyAccessToken(companyId)
-
-  let syncToken: string | undefined = company.gg_sync_token ?? undefined
+  let syncToken: string | undefined = calendar.sync_token ?? undefined
   let pageToken: string | undefined = undefined
   let nextSyncToken: string | null = null
   let fullResync = false
@@ -42,7 +40,7 @@ export async function syncCompanyEvents(companyId: string): Promise<SyncStats> {
   for (let i = 0; i < PAGE_LIMIT; i++) {
     let res
     try {
-      res = await listEvents(accessToken, calendarId, {
+      res = await listEvents(accessToken, calendar.gg_calendar_id, {
         syncToken: pageToken ? undefined : syncToken,
         pageToken,
         showDeleted: true,
@@ -74,26 +72,29 @@ export async function syncCompanyEvents(companyId: string): Promise<SyncStats> {
 
   for (const ev of all) {
     if (!ev.id) continue
+
     if (ev.status === 'cancelled') {
       const { error } = await admin
         .from('agendamentos')
         .update({ status_agenda: 'Cancelado' })
         .eq('id', ev.id)
-        .eq('companie_id', companyId)
+        .eq('companie_id', companieId)
       if (!error) cancelled++
       continue
     }
 
     const ext = ev.extendedProperties?.private ?? {}
-    const userIdFromExt = typeof ext.zapifine_user_id === 'string' ? ext.zapifine_user_id : null
+    const userIdFromExt = typeof ext.zapifine_user_id === 'string' ? ext.zapifine_user_id : userId
     const leadIdFromExt = typeof ext.zapifine_lead_id === 'string' ? Number(ext.zapifine_lead_id) : null
 
     const { error } = await admin
       .from('agendamentos')
       .upsert({
         id: ev.id,
-        companie_id: companyId,
+        companie_id: companieId,
         user_id: userIdFromExt,
+        integration_id: integrationId,
+        source_calendar_id: calendar.id,
         lead_id: Number.isFinite(leadIdFromExt) ? leadIdFromExt : null,
         gg_title: ev.summary ?? null,
         gg_start: ev.start?.dateTime ?? (ev.start?.date ? new Date(ev.start.date).toISOString() : null),
@@ -108,18 +109,42 @@ export async function syncCompanyEvents(companyId: string): Promise<SyncStats> {
   }
 
   await admin
-    .from('companies')
+    .from('google_calendars')
     .update({
-      gg_sync_token: nextSyncToken,
-      gg_synced_at: new Date().toISOString(),
+      sync_token: nextSyncToken,
+      synced_at: new Date().toISOString(),
     })
-    .eq('id', companyId)
+    .eq('id', calendar.id)
 
   return {
+    calendar_id: calendar.id,
+    gg_calendar_id: calendar.gg_calendar_id,
     fetched,
     upserted,
     cancelled,
     full_resync: fullResync,
-    next_sync_token: nextSyncToken,
   }
+}
+
+export async function syncIntegration(integrationId: string): Promise<IntegrationSyncStats> {
+  const { accessToken, integration } = await getIntegrationAccessToken(integrationId)
+  const calendars = await listSelectedCalendars(integrationId)
+
+  const stats: CalendarSyncStats[] = []
+  for (const cal of calendars) {
+    try {
+      const s = await syncOneCalendar({
+        accessToken,
+        integrationId,
+        companieId: integration.companie_id,
+        userId: integration.user_id,
+        calendar: cal,
+      })
+      stats.push(s)
+    } catch (err) {
+      console.warn(`[google-sync] calendar ${cal.gg_calendar_id}:`, err)
+    }
+  }
+
+  return { integration_id: integrationId, calendars: stats }
 }

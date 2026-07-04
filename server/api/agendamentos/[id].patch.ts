@@ -4,9 +4,12 @@ import {
   parseDateTimeInput,
   requireMembership,
 } from '~~/server/utils/agendamentos-helpers'
-import { getCompanyAccessToken } from '~~/server/utils/google-token'
+import { getIntegrationAccessToken } from '~~/server/utils/google-integration'
 import { patchEvent } from '~~/server/utils/google-calendar'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
+import type { Database } from '~~/types/database'
+
+type AgendamentoUpdate = Database['public']['Tables']['agendamentos']['Update']
 
 type Body = {
   title?: string
@@ -33,7 +36,7 @@ export default defineEventHandler(async (event) => {
   // Verifica que o agendamento pertence à empresa do usuário
   const { data: existing, error: exErr } = await admin
     .from('agendamentos')
-    .select('id, companie_id, user_id, status_agenda')
+    .select('id, companie_id, user_id, status_agenda, integration_id, source_calendar_id')
     .eq('id', id)
     .maybeSingle()
 
@@ -46,10 +49,16 @@ export default defineEventHandler(async (event) => {
   if (existing.status_agenda === 'Cancelado') {
     throw createError({ statusCode: 409, statusMessage: 'Agendamento cancelado não pode ser editado.' })
   }
+  if (!existing.integration_id || !existing.source_calendar_id) {
+    throw createError({
+      statusCode: 412,
+      statusMessage: 'Agendamento sem integração Google vinculada. Recrie o evento após conectar.',
+    })
+  }
 
   const tz = body.timezone?.trim() || DEFAULT_TZ
   const patch: Record<string, unknown> = {}
-  const dbPatch: Record<string, unknown> = {}
+  const dbPatch: AgendamentoUpdate = {}
 
   if (body.title !== undefined) {
     const t = body.title.trim()
@@ -97,8 +106,17 @@ export default defineEventHandler(async (event) => {
     dbPatch.lead_id = body.lead_id
   }
 
-  const { accessToken, calendarId } = await getCompanyAccessToken(me.companieId)
-  const updated = await patchEvent(accessToken, calendarId, id, {
+  const { data: srcCal } = await admin
+    .from('google_calendars')
+    .select('gg_calendar_id')
+    .eq('id', existing.source_calendar_id)
+    .maybeSingle()
+  if (!srcCal) {
+    throw createError({ statusCode: 412, statusMessage: 'Calendário de origem não encontrado.' })
+  }
+
+  const { accessToken } = await getIntegrationAccessToken(existing.integration_id)
+  const updated = await patchEvent(accessToken, srcCal.gg_calendar_id, id, {
     summary: patch.summary as string | undefined,
     description: patch.description as string | undefined,
     location: patch.location as string | undefined,

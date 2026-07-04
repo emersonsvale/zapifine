@@ -32,12 +32,6 @@ export default defineEventHandler(async (event) => {
       statusMessage: 'Sua conta não está vinculada a uma empresa.',
     })
   }
-  if (me.funcao_user !== 'OWNER') {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Apenas o dono pode conectar o Google Calendar.',
-    })
-  }
 
   const query = getQuery(event)
   const redirectTo = typeof query.redirect_to === 'string' ? query.redirect_to : '/agendas'

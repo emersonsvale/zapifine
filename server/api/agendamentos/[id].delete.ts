@@ -1,5 +1,5 @@
 import { requireMembership } from '~~/server/utils/agendamentos-helpers'
-import { getCompanyAccessToken } from '~~/server/utils/google-token'
+import { getIntegrationAccessToken } from '~~/server/utils/google-integration'
 import { deleteEvent } from '~~/server/utils/google-calendar'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const admin = useSupabaseAdmin()
   const { data: existing, error: exErr } = await admin
     .from('agendamentos')
-    .select('id, companie_id, status_agenda')
+    .select('id, companie_id, status_agenda, integration_id, source_calendar_id')
     .eq('id', id)
     .maybeSingle()
 
@@ -30,14 +30,22 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Sem permissão.' })
   }
 
-  if (existing.status_agenda !== 'Cancelado') {
-    const { accessToken, calendarId } = await getCompanyAccessToken(me.companieId)
-    try {
-      await deleteEvent(accessToken, calendarId, id, sendUpdates)
-    } catch (err) {
-      const e = err as { statusCode?: number }
-      if (e.statusCode !== 404 && e.statusCode !== 410) throw err
-      // 404/410: evento já não existe no Google. Continua marcando cancelado.
+  if (existing.status_agenda !== 'Cancelado' && existing.integration_id && existing.source_calendar_id) {
+    const { data: srcCal } = await admin
+      .from('google_calendars')
+      .select('gg_calendar_id')
+      .eq('id', existing.source_calendar_id)
+      .maybeSingle()
+
+    if (srcCal) {
+      try {
+        const { accessToken } = await getIntegrationAccessToken(existing.integration_id)
+        await deleteEvent(accessToken, srcCal.gg_calendar_id, id, sendUpdates)
+      } catch (err) {
+        const e = err as { statusCode?: number }
+        if (e.statusCode !== 404 && e.statusCode !== 410 && e.statusCode !== 412) throw err
+        // 404/410: já não existe no Google. 412: integração desconectada — segue.
+      }
     }
   }
 

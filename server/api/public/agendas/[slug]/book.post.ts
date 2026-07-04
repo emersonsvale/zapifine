@@ -1,5 +1,5 @@
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
-import { getCompanyAccessToken } from '~~/server/utils/google-token'
+import { requireUserWriteContext } from '~~/server/utils/google-integration'
 import { insertEvent } from '~~/server/utils/google-calendar'
 import { checkUserAvailability } from '~~/server/utils/availability-check'
 import { renderTemplate } from '~~/server/utils/agenda-templates-render'
@@ -53,15 +53,12 @@ export default defineEventHandler(async (event) => {
   const admin = useSupabaseAdmin()
   const { data: company } = await admin
     .from('companies')
-    .select('id, name, agenda_publico_ativo, gg_calendar_id, gg_refresh_token')
+    .select('id, name, agenda_publico_ativo')
     .eq('agenda_publico_slug', slug)
     .maybeSingle()
 
   if (!company || !company.agenda_publico_ativo) {
     throw createError({ statusCode: 404, statusMessage: 'Agenda pública não encontrada.' })
-  }
-  if (!company.gg_calendar_id || !company.gg_refresh_token) {
-    throw createError({ statusCode: 412, statusMessage: 'Empresa sem Google Calendar conectado.' })
   }
 
   // Resolve user_id: se vier null, escolhe primeiro atendente disponível no slot
@@ -131,9 +128,9 @@ export default defineEventHandler(async (event) => {
     leadId = (lead as { id: number } | null)?.id ?? null
   }
 
-  const { accessToken, calendarId } = await getCompanyAccessToken(company.id)
+  const { accessToken, calendar, integrationId } = await requireUserWriteContext(finalUserId)
 
-  const created = await insertEvent(accessToken, calendarId, {
+  const created = await insertEvent(accessToken, calendar.gg_calendar_id, {
     summary: title,
     description: body.guest?.notes?.trim() || `Agendado via página pública.\nNome: ${guestName}\nE-mail: ${guestEmail}${guestPhone ? `\nTelefone: ${guestPhone}` : ''}`,
     start: { dateTime: body.start, timeZone: tz },
@@ -155,6 +152,8 @@ export default defineEventHandler(async (event) => {
     companie_id: company.id,
     user_id: finalUserId,
     lead_id: leadId,
+    integration_id: integrationId,
+    source_calendar_id: calendar.id,
     gg_title: title,
     gg_start: body.start,
     gg_end: body.end,

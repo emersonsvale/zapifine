@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { Calendar as CalIcon, List as ListIcon, Plus, RefreshCw, Clock, MessageSquare, Bug, Globe } from 'lucide-vue-next'
+import { Calendar as CalIcon, List as ListIcon, Plus, RefreshCw, Clock, MessageSquare, Bug, Globe, Unplug } from 'lucide-vue-next'
 import type { AgendamentoWithLead } from '~/composables/useAgendamentos'
 
 useHead({ title: 'Agendas e Disponibilidade - Zapifine' })
@@ -14,6 +14,7 @@ const dialogOpen = ref(false)
 const editDialogOpen = ref(false)
 const editing = ref<AgendamentoWithLead | null>(null)
 const syncing = ref(false)
+const disconnecting = ref(false)
 
 const {
   agendamentos,
@@ -23,6 +24,7 @@ const {
   confirmEvent,
   cancelEvent,
   syncFromGoogle,
+  disconnectGoogle,
 } = useAgendamentos()
 
 const { toast, confirm } = useAlerts()
@@ -67,6 +69,26 @@ function onEdit(ag: AgendamentoWithLead) {
   editDialogOpen.value = true
 }
 
+async function onDisconnect() {
+  const ok = await confirm({
+    title: 'Desconectar Google Calendar',
+    description:
+      'Novos agendamentos deixarão de sincronizar. Eventos já criados no Google permanecem lá. Você pode reconectar depois.',
+    confirmLabel: 'Desconectar',
+    variant: 'danger',
+  })
+  if (!ok) return
+  disconnecting.value = true
+  try {
+    await disconnectGoogle()
+    toast.success('Google Calendar desconectado.')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao desconectar.')
+  } finally {
+    disconnecting.value = false
+  }
+}
+
 async function onSync() {
   syncing.value = true
   try {
@@ -94,6 +116,15 @@ async function onSync() {
           <Button variant="outline" :disabled="syncing" @click="onSync">
             <RefreshCw class="h-4 w-4" :class="syncing ? 'animate-spin' : ''" />
             Sincronizar
+          </Button>
+          <Button
+            v-if="isOwner"
+            variant="outline"
+            :disabled="disconnecting"
+            @click="onDisconnect"
+          >
+            <Unplug class="h-4 w-4" />
+            Desconectar Google
           </Button>
           <Button @click="dialogOpen = true">
             <Plus class="h-4 w-4" />

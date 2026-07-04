@@ -3,6 +3,8 @@ import type { Database } from '~~/types/database'
 import { revokeToken } from '~~/server/utils/google-oauth'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 
+type Body = { integration_id?: string }
+
 export default defineEventHandler(async (event) => {
   const authUser = await serverSupabaseUser(event)
   if (!authUser?.id) {
@@ -12,50 +14,53 @@ export default defineEventHandler(async (event) => {
   const supa = await serverSupabaseClient<Database>(event)
   const { data: me } = await supa
     .from('users')
-    .select('companie_id, funcao_user')
+    .select('id, companie_id, funcao_user')
     .eq('id', authUser.id)
     .maybeSingle()
 
   if (!me?.companie_id) {
     throw createError({ statusCode: 403, statusMessage: 'Sem empresa vinculada.' })
   }
-  if (me.funcao_user !== 'OWNER') {
-    throw createError({
-      statusCode: 403,
-      statusMessage: 'Apenas o dono pode desconectar.',
-    })
-  }
 
+  const body: Body = await readBody<Body>(event).catch(() => ({} as Body))
   const admin = useSupabaseAdmin()
-  const { data: company } = await admin
-    .from('companies')
-    .select('gg_refresh_token')
-    .eq('id', me.companie_id)
-    .maybeSingle()
+  const isOwner = me.funcao_user === 'OWNER'
 
-  if (company?.gg_refresh_token) {
-    await revokeToken(company.gg_refresh_token)
-  }
+  const query = admin
+    .from('google_integrations')
+    .select('id, user_id, refresh_token, companie_id')
+    .is('revoked_at', null)
 
-  const { error } = await admin
-    .from('companies')
-    .update({
-      gg_access_token: null,
-      gg_refresh_token: null,
-      gg_token_expires_at: null,
-      gg_email: null,
-      gg_scopes: null,
-      gg_sync_token: null,
-      // mantém gg_calendar_id pra reusar se reconectar mesma conta
-    })
-    .eq('id', me.companie_id)
+  const filtered = body.integration_id
+    ? query.eq('id', body.integration_id)
+    : query.eq('user_id', authUser.id)
 
+  const { data: integs, error } = await filtered
   if (error) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: `Falha ao desconectar: ${error.message}`,
-    })
+    throw createError({ statusCode: 500, statusMessage: error.message })
   }
 
-  return { ok: true }
+  if (!integs || integs.length === 0) {
+    return { ok: true, revoked: 0 }
+  }
+
+  let revoked = 0
+  for (const integ of integs) {
+    if (integ.companie_id !== me.companie_id) continue
+    if (integ.user_id !== authUser.id && !isOwner) continue
+
+    if (integ.refresh_token) {
+      await revokeToken(integ.refresh_token)
+    }
+    const { error: upErr } = await admin
+      .from('google_integrations')
+      .update({
+        revoked_at: new Date().toISOString(),
+        access_token: null,
+      })
+      .eq('id', integ.id)
+    if (!upErr) revoked++
+  }
+
+  return { ok: true, revoked }
 })

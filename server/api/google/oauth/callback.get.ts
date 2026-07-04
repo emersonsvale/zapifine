@@ -4,7 +4,7 @@ import {
   GOOGLE_OAUTH_SCOPES,
   verifyState,
 } from '~~/server/utils/google-oauth'
-import { createCalendar, getCalendar } from '~~/server/utils/google-calendar'
+import { listCalendarList } from '~~/server/utils/google-calendar'
 import { useSupabaseAdmin } from '~~/server/utils/supabase-admin'
 
 function safeRedirectPath(input: string | undefined): string {
@@ -58,57 +58,99 @@ export default defineEventHandler(async (event) => {
   }
 
   const userInfo = await fetchUserInfo(tokens.access_token).catch(() => null)
-
   const admin = useSupabaseAdmin()
-
-  // Pega calendar atual da empresa (se existir, valida; senão cria)
-  const { data: company, error: cErr } = await admin
-    .from('companies')
-    .select('id, name, gg_calendar_id')
-    .eq('id', parsed.companie_id)
-    .maybeSingle()
-
-  if (cErr || !company) {
-    throw createError({ statusCode: 404, statusMessage: 'Empresa não encontrada.' })
-  }
-
-  let calendarId = company.gg_calendar_id ?? null
-  if (calendarId) {
-    // Valida que ainda existe (usuário pode ter deletado no Google)
-    try {
-      await getCalendar(tokens.access_token, calendarId)
-    } catch {
-      calendarId = null
-    }
-  }
-  if (!calendarId) {
-    const created = await createCalendar(tokens.access_token, {
-      summary: `Zapifine - ${company.name}`,
-      timeZone: 'America/Sao_Paulo',
-      description: 'Agendamentos sincronizados pelo Zapifine.',
-    })
-    calendarId = created.id
-  }
 
   const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString()
 
-  const { error: upErr } = await admin
-    .from('companies')
-    .update({
-      gg_access_token: tokens.access_token,
-      gg_refresh_token: tokens.refresh_token,
-      gg_token_expires_at: expiresAt,
-      gg_calendar_id: calendarId,
-      gg_email: userInfo?.email ?? null,
-      gg_scopes: tokens.scope ? tokens.scope.split(' ') : GOOGLE_OAUTH_SCOPES,
-    })
-    .eq('id', parsed.companie_id)
+  // Upsert integration: (user_id, gg_email) UNIQUE onde revoked_at null
+  const emailKey = userInfo?.email?.toLowerCase() ?? null
 
-  if (upErr) {
-    throw createError({
-      statusCode: 500,
-      statusMessage: `Falha ao salvar tokens: ${upErr.message}`,
-    })
+  let integrationId: string | null = null
+  if (emailKey) {
+    const { data: existing } = await admin
+      .from('google_integrations')
+      .select('id')
+      .eq('user_id', parsed.user_id)
+      .eq('gg_email', emailKey)
+      .is('revoked_at', null)
+      .maybeSingle()
+    if (existing?.id) integrationId = existing.id
+  }
+
+  if (integrationId) {
+    const { error: upErr } = await admin
+      .from('google_integrations')
+      .update({
+        companie_id: parsed.companie_id,
+        gg_sub: userInfo?.sub ?? null,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_expires_at: expiresAt,
+        scopes: tokens.scope ? tokens.scope.split(' ') : GOOGLE_OAUTH_SCOPES,
+        revoked_at: null,
+      })
+      .eq('id', integrationId)
+    if (upErr) {
+      throw createError({ statusCode: 500, statusMessage: `Falha update integration: ${upErr.message}` })
+    }
+  } else {
+    const { data: inserted, error: insErr } = await admin
+      .from('google_integrations')
+      .insert({
+        user_id: parsed.user_id,
+        companie_id: parsed.companie_id,
+        gg_email: emailKey,
+        gg_sub: userInfo?.sub ?? null,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_expires_at: expiresAt,
+        scopes: tokens.scope ? tokens.scope.split(' ') : GOOGLE_OAUTH_SCOPES,
+      })
+      .select('id')
+      .maybeSingle()
+    if (insErr || !inserted?.id) {
+      throw createError({ statusCode: 500, statusMessage: `Falha insert integration: ${insErr?.message ?? 'nulo'}` })
+    }
+    integrationId = inserted.id
+  }
+
+  // Popula google_calendars via calendarList
+  const calList = await listCalendarList(tokens.access_token).catch(() => [])
+
+  // Descobre se já tem default_write pra essa integration
+  const { data: hasDefault } = await admin
+    .from('google_calendars')
+    .select('id')
+    .eq('integration_id', integrationId)
+    .eq('default_write', true)
+    .maybeSingle()
+
+  for (const c of calList) {
+    if (c.deleted) continue
+    const readonly = c.accessRole === 'reader' || c.accessRole === 'freeBusyReader'
+    const row = {
+      integration_id: integrationId,
+      gg_calendar_id: c.id,
+      summary: c.summaryOverride ?? c.summary ?? null,
+      description: c.description ?? null,
+      time_zone: c.timeZone ?? null,
+      primary_flag: !!c.primary,
+      access_role: c.accessRole ?? null,
+      color_hex: c.backgroundColor ?? null,
+      // preserva selected/default_write se linha já existe (usa onConflict)
+    }
+    await admin
+      .from('google_calendars')
+      .upsert(row, { onConflict: 'integration_id,gg_calendar_id', ignoreDuplicates: false })
+
+    // Se não tem default_write e este é primary + gravável → marca
+    if (!hasDefault && c.primary && !readonly) {
+      await admin
+        .from('google_calendars')
+        .update({ default_write: true })
+        .eq('integration_id', integrationId)
+        .eq('gg_calendar_id', c.id)
+    }
   }
 
   await sendRedirect(event, `${redirectTo}?google=connected`, 302)
