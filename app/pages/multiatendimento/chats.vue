@@ -26,6 +26,7 @@ import {
   ChevronDown,
   Eye,
   CheckCircle2,
+  CalendarPlus,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 import { formatPhone } from '~/lib/utils'
@@ -636,6 +637,12 @@ const funilColumnOptions = computed(() =>
 
 const concludeOpen = ref(false)
 const moving = ref(false)
+const agendaOpen = ref(false)
+
+const agendaPrefillTitle = computed(() => {
+  const name = selectedConversation.value?.leads?.nome_lead?.trim()
+  return name ? `Atendimento — ${name}` : null
+})
 
 async function onConclude(colunaId: number) {
   const leadId = leadForDialog.value?.id
@@ -896,6 +903,17 @@ const groupedMessages = computed<GroupedItem[]>(() => {
           >
             <ArrowRightLeft class="h-4 w-4" />
             <span class="hidden text-xs sm:inline">Transferir</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            class="gap-1"
+            :disabled="!hasLead"
+            :title="!hasLead ? 'Vincule um lead para agendar' : 'Novo agendamento'"
+            @click="agendaOpen = true"
+          >
+            <CalendarPlus class="h-4 w-4" />
+            <span class="hidden text-xs sm:inline">Agendar</span>
           </Button>
           <DropdownMenu v-model:open="concludeOpen">
             <DropdownMenuTrigger as-child>
@@ -1251,6 +1269,12 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       :initial-mode="transferMode"
       @submit-user="onTransferUser"
       @submit-setor="onTransferSetor"
+    />
+
+    <AgendasNovoAgendamentoDialog
+      v-model:open="agendaOpen"
+      :prefill-lead-id="selectedConversation?.leads?.id ?? null"
+      :prefill-title="agendaPrefillTitle"
     />
   </div>
 </template>

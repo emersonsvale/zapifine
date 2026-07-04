@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { reactive, ref, watch, computed } from 'vue'
+import { reactive, ref, watch, computed, nextTick } from 'vue'
 import { Loader2, X, Plus } from 'lucide-vue-next'
 import type { AttendeeInput, CreateEventError } from '~/composables/useAgendamentos'
 
 const open = defineModel<boolean>('open', { default: false })
+
+const props = defineProps<{
+  prefillLeadId?: number | null
+  prefillTitle?: string | null
+}>()
 
 const { leads } = useLeads()
 const { createEvent } = useAgendamentos()
@@ -51,7 +56,7 @@ const tz = computed(() => Intl.DateTimeFormat().resolvedOptions().timeZone || 'A
 
 watch(open, (v) => {
   if (!v) return
-  form.title = ''
+  form.title = props.prefillTitle ?? ''
   form.description = ''
   form.location = ''
   form.startDate = ''
@@ -64,6 +69,12 @@ watch(open, (v) => {
   newEmail.value = ''
   newName.value = ''
   errorMsg.value = ''
+  if (props.prefillLeadId) {
+    const id = String(props.prefillLeadId)
+    nextTick(() => {
+      form.lead_id = id
+    })
+  }
 })
 
 watch(() => form.lead_id, (val) => {
