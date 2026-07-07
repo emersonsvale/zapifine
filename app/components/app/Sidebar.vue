@@ -57,6 +57,7 @@ const nav: Entry[] = [
     to: '/multiatendimento/chats',
     children: [
       { to: '/multiatendimento/chats', label: 'Chats', icon: MessagesSquare, minPlan: 2 },
+      { to: '/follow-up', label: 'Follow-up Automático', icon: RefreshCw, minPlan: 2 },
       { to: '/multiatendimento/configuracoes', label: 'Configurações', icon: Settings, minPlan: 2 },
     ],
   },
@@ -70,7 +71,6 @@ const nav: Entry[] = [
     ],
   },
   { type: 'item', to: '/agendas', label: 'Agendas e Disponibilidade', icon: Calendar, minPlan: 2 },
-  { type: 'item', to: '/follow-up', label: 'Follow-up Automático', icon: RefreshCw, minPlan: 2 },
   {
     type: 'item',
     to: '/lembretes',
