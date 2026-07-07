@@ -91,11 +91,11 @@ function replaceConfig(next: Record<string, unknown>) {
           <textarea
             class="min-h-24 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             :value="String(node.data.config.text ?? '')"
-            placeholder="Use {{lead.nome}} para variáveis"
+            :placeholder="'Use {{lead.nome}} para variáveis'"
             @input="patchConfig({ text: ($event.target as HTMLTextAreaElement).value })"
           />
           <p class="text-[11px] text-muted-foreground">
-            Variáveis: <code>{{ '{{trigger_message}}' }}</code>, <code>{{ '{{reply}}' }}</code>
+            <span v-pre>Variáveis: <code>{{trigger_message}}</code>, <code>{{reply}}</code></span>
           </p>
         </div>
         <div class="space-y-1">
