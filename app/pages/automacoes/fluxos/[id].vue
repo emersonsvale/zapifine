@@ -64,19 +64,21 @@ type VfEdge = {
   markerEnd?: string
 }
 
-const nodes = ref<VfNode[]>([])
-const edges = ref<VfEdge[]>([])
 const selectedId = ref<string | null>(null)
 const errorMsg = ref<string | null>(null)
 const info = ref<string | null>(null)
 
 const {
+  nodes,
+  edges,
   onConnect,
   addEdges,
-  applyNodeChanges,
-  applyEdgeChanges,
-  project,
-  vueFlowRef,
+  addNodes,
+  setNodes,
+  setEdges,
+  removeNodes,
+  fitView,
+  screenToFlowCoordinate,
 } = useVueFlow()
 
 const canvasWrapper = ref<HTMLElement | null>(null)
@@ -125,10 +127,10 @@ function vueFlowToGraph(): FlowGraph {
   return {
     nodes: nodes.value.map((n) => ({
       id: n.id,
-      type: n.data.nodeType,
-      label: n.data.label,
+      type: (n.data as VfNode['data']).nodeType,
+      label: (n.data as VfNode['data']).label,
       position: n.position,
-      config: n.data.config,
+      config: (n.data as VfNode['data']).config,
       next: null,
     })),
     edges: edges.value.map((e) => ({ from: e.source, to: e.target })),
@@ -148,21 +150,20 @@ onMounted(async () => {
   triggerConfig.value = (flow.value.trigger_config ?? {}) as Record<string, unknown>
   const graph = flow.value.graph ?? { nodes: [], edges: [] }
   if (graph.nodes.length === 0) {
-    // Seed com trigger
     const triggerId = crypto.randomUUID()
-    nodes.value = [
+    setNodes([
       {
         id: triggerId,
         type: 'flowNode',
         position: { x: 240, y: 40 },
         data: { label: 'Gatilho', nodeType: 'trigger', config: {}, summary: '' },
       },
-    ]
-    edges.value = []
+    ])
+    setEdges([])
   } else {
     const conv = graphToVueFlow(graph)
-    nodes.value = conv.nodes
-    edges.value = conv.edges
+    setNodes(conv.nodes)
+    setEdges(conv.edges)
   }
 })
 
@@ -175,12 +176,6 @@ onConnect((params) => {
   addEdges([{ ...params, markerEnd: MarkerType.ArrowClosed }])
 })
 
-function onNodesChange(changes: unknown[]) {
-  applyNodeChanges(changes as never)
-}
-function onEdgesChange(changes: unknown[]) {
-  applyEdgeChanges(changes as never)
-}
 function onNodeClick({ node }: { node: { id: string } }) {
   selectedId.value = node.id
 }
@@ -199,11 +194,7 @@ function onCanvasDrop(e: DragEvent) {
   if (!type) return
   const meta = getNodeMeta(type)
   if (!meta) return
-  const bounds = (vueFlowRef.value as HTMLElement | null)?.getBoundingClientRect()
-  const point = project({
-    x: e.clientX - (bounds?.left ?? 0),
-    y: e.clientY - (bounds?.top ?? 0),
-  })
+  const point = screenToFlowCoordinate({ x: e.clientX, y: e.clientY })
   const newNode: VfNode = {
     id: crypto.randomUUID(),
     type: 'flowNode',
@@ -215,44 +206,40 @@ function onCanvasDrop(e: DragEvent) {
       summary: '',
     },
   }
-  nodes.value = [...nodes.value, newNode]
+  addNodes([newNode])
   nextTick(() => (selectedId.value = newNode.id))
 }
 
 const graphNodesForInspector = computed(() =>
-  nodes.value.map((n) => ({
-    id: n.id,
-    label: n.data.label ?? '',
-    type: n.data.nodeType,
-  })),
+  nodes.value.map((n) => {
+    const d = n.data as VfNode['data']
+    return { id: n.id, label: d.label ?? '', type: d.nodeType }
+  }),
 )
 
 const selectedNode = computed(() => {
   if (!selectedId.value) return null
   const n = nodes.value.find((x) => x.id === selectedId.value)
   if (!n) return null
-  return { id: n.id, type: n.data.nodeType, data: n.data }
+  const d = n.data as VfNode['data']
+  return { id: n.id, type: d.nodeType, data: d }
 })
 
 function onNodeUpdate(id: string, patch: { label?: string; config?: Record<string, unknown> }) {
-  nodes.value = nodes.value.map((n) => {
-    if (n.id !== id) return n
-    const nextConfig = patch.config ?? n.data.config
-    return {
-      ...n,
-      data: {
-        ...n.data,
-        label: patch.label !== undefined ? patch.label : n.data.label,
-        config: nextConfig,
-        summary: summarize(n.data.nodeType, nextConfig),
-      },
-    }
-  })
+  const n = nodes.value.find((x) => x.id === id)
+  if (!n) return
+  const d = n.data as VfNode['data']
+  const nextConfig = patch.config ?? d.config
+  n.data = {
+    ...d,
+    label: patch.label !== undefined ? patch.label : d.label,
+    config: nextConfig,
+    summary: summarize(d.nodeType, nextConfig),
+  }
 }
 
 function onNodeRemove(id: string) {
-  nodes.value = nodes.value.filter((n) => n.id !== id)
-  edges.value = edges.value.filter((e) => e.source !== id && e.target !== id)
+  removeNodes([id])
   if (selectedId.value === id) selectedId.value = null
 }
 
@@ -349,13 +336,9 @@ const nodeTypes = { flowNode: FlowNodeCard } as unknown as NodeTypesObject
         @drop="onCanvasDrop"
       >
         <VueFlow
-          :nodes="nodes"
-          :edges="edges"
           :node-types="nodeTypes"
           :fit-view-on-init="true"
           :default-viewport="{ x: 0, y: 0, zoom: 0.9 }"
-          @nodes-change="onNodesChange"
-          @edges-change="onEdgesChange"
           @node-click="onNodeClick"
           @pane-click="onPaneClick"
         >
