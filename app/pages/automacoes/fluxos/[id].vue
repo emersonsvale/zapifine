@@ -61,6 +61,7 @@ type VfEdge = {
   id: string
   source: string
   target: string
+  label?: string
   markerEnd?: string
 }
 
@@ -102,6 +103,28 @@ function summarize(nodeType: string, cfg: Record<string, unknown>): string {
   return ''
 }
 
+type BranchLike = { next?: string | null; label?: string | null }
+
+function edgeLabelForSource(
+  fromNode: { type: string; config?: Record<string, unknown> } | undefined,
+  targetId: string,
+): string | undefined {
+  if (!fromNode) return undefined
+  if (fromNode.type === 'condition') {
+    const cfg = (fromNode.config ?? {}) as { branches?: BranchLike[]; else?: string | null }
+    const branch = (cfg.branches ?? []).find((b) => b.next === targetId)
+    if (branch) return branch.label?.trim() || 'ramo'
+    if (cfg.else === targetId) return 'senão'
+    return undefined
+  }
+  if (fromNode.type === 'wait_reply') {
+    const cfg = (fromNode.config ?? {}) as { branches?: { timeout?: string | null } }
+    if (cfg.branches?.timeout && cfg.branches.timeout === targetId) return 'timeout'
+    return 'resposta'
+  }
+  return undefined
+}
+
 function graphToVueFlow(graph: FlowGraph): { nodes: VfNode[]; edges: VfEdge[] } {
   const vfNodes: VfNode[] = graph.nodes.map((n, i) => ({
     id: n.id,
@@ -114,12 +137,17 @@ function graphToVueFlow(graph: FlowGraph): { nodes: VfNode[]; edges: VfEdge[] } 
       config: (n.config ?? {}) as Record<string, unknown>,
     },
   }))
-  const vfEdges: VfEdge[] = graph.edges.map((e, i) => ({
-    id: `e-${e.from}-${e.to}-${i}`,
-    source: e.from,
-    target: e.to,
-    markerEnd: MarkerType.ArrowClosed,
-  }))
+  const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+  const vfEdges: VfEdge[] = graph.edges.map((e, i) => {
+    const from = byId.get(e.from)
+    return {
+      id: `e-${e.from}-${e.to}-${i}`,
+      source: e.from,
+      target: e.to,
+      label: edgeLabelForSource(from, e.to),
+      markerEnd: MarkerType.ArrowClosed,
+    }
+  })
   return { nodes: vfNodes, edges: vfEdges }
 }
 
@@ -259,6 +287,15 @@ function onNodeUpdate(id: string, patch: { label?: string; config?: Record<strin
     label: patch.label !== undefined ? patch.label : d.label,
     config: nextConfig,
     summary: summarize(d.nodeType, nextConfig),
+  }
+  if (d.nodeType === 'condition' || d.nodeType === 'wait_reply') {
+    const from = { type: d.nodeType, config: nextConfig }
+    for (const e of edges.value) {
+      if (e.source !== id) continue
+      const label = edgeLabelForSource(from, e.target)
+      if (label !== undefined) (e as VfEdge).label = label
+      else delete (e as VfEdge).label
+    }
   }
 }
 

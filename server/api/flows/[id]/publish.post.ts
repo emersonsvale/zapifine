@@ -9,14 +9,73 @@ type FlowRow = {
   version: number
 }
 
+type GraphNode = {
+  id: string
+  type: string
+  label?: string
+  next?: string | null
+  config?: Record<string, unknown>
+}
+type GraphEdge = { from: string; to: string }
+type BranchCfg = { next?: string | null; label?: string | null; id?: string }
+
 function validateGraph(graph: FlowRow['graph']): string | null {
   if (!graph) return 'Fluxo sem grafo.'
-  if (!Array.isArray(graph.nodes) || graph.nodes.length === 0) return 'Fluxo sem nós.'
-  if (!Array.isArray(graph.edges)) return 'Fluxo sem arestas.'
-  const hasTrigger = (graph.nodes as Array<{ type?: string }>).some(
-    (n) => n.type === 'trigger',
-  )
-  if (!hasTrigger) return 'Fluxo precisa ter um nó de gatilho.'
+  const nodes = (graph.nodes as GraphNode[] | undefined) ?? []
+  const edges = (graph.edges as GraphEdge[] | undefined) ?? []
+  if (nodes.length === 0) return 'Fluxo sem nós.'
+  if (!Array.isArray(edges)) return 'Fluxo sem arestas.'
+
+  const triggers = nodes.filter((n) => n.type === 'trigger')
+  if (triggers.length === 0) return 'Fluxo precisa ter um nó de gatilho.'
+  if (triggers.length > 1) return 'Fluxo com mais de um nó de gatilho.'
+
+  const byId = new Map(nodes.map((n) => [n.id, n]))
+  for (const e of edges) {
+    if (!byId.has(e.from)) return `Aresta com origem inválida: ${e.from}`
+    if (!byId.has(e.to)) return `Aresta com destino inválido: ${e.to}`
+  }
+
+  const incoming = new Set<string>()
+  for (const e of edges) incoming.add(e.to)
+
+  for (const n of nodes) {
+    if (n.type === 'trigger') continue
+    if (!incoming.has(n.id)) {
+      return `Nó "${n.label || n.type}" (${n.id.slice(0, 8)}) está desconectado — sem aresta de entrada.`
+    }
+  }
+
+  const TERMINAL_TYPES = new Set(['end'])
+  const hasOutgoing = new Set(edges.map((e) => e.from))
+  for (const n of nodes) {
+    if (TERMINAL_TYPES.has(n.type)) continue
+    if (n.type === 'condition') {
+      const cfg = (n.config ?? {}) as { branches?: BranchCfg[]; else?: string | null }
+      const branches = Array.isArray(cfg.branches) ? cfg.branches : []
+      if (branches.length === 0) return `Condição "${n.label || n.id.slice(0, 8)}" sem ramificações.`
+      for (const b of branches) {
+        if (!b.next) return `Condição "${n.label || n.id.slice(0, 8)}" tem ramo sem destino.`
+        if (!byId.has(b.next)) return `Condição "${n.label || n.id.slice(0, 8)}" aponta para nó inexistente.`
+      }
+      if (!cfg.else) return `Condição "${n.label || n.id.slice(0, 8)}" sem ramo padrão (senão).`
+      if (!byId.has(cfg.else)) return `Condição "${n.label || n.id.slice(0, 8)}" com senão inválido.`
+      continue
+    }
+    if (n.type === 'wait_reply') {
+      const cfg = (n.config ?? {}) as { branches?: { timeout?: string | null } }
+      const t = cfg.branches?.timeout
+      if (t && !byId.has(t)) return `Aguardar resposta "${n.label || n.id.slice(0, 8)}" com timeout inválido.`
+      if (!hasOutgoing.has(n.id) && !t) {
+        return `Nó "${n.label || n.type}" (${n.id.slice(0, 8)}) sem saída — conecte a um próximo nó ou defina timeout.`
+      }
+      continue
+    }
+    if (!hasOutgoing.has(n.id)) {
+      return `Nó "${n.label || n.type}" (${n.id.slice(0, 8)}) sem saída — conecte a um próximo nó ou use um nó "Fim".`
+    }
+  }
+
   return null
 }
 

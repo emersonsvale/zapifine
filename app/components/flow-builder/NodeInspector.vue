@@ -149,6 +149,28 @@ function replaceConfig(next: Record<string, unknown>) {
             @update:model-value="patchConfig({ timeout_seconds: Number($event) })"
           />
         </div>
+        <div class="space-y-1">
+          <Label class="text-xs">Se estourar timeout, ir para</Label>
+          <Select
+            :model-value="String((node.data.config.branches as { timeout?: string | null } | undefined)?.timeout ?? '')"
+            @update:model-value="patchConfig({
+              branches: {
+                ...((node!.data.config.branches as Record<string, unknown> | undefined) ?? {}),
+                timeout: $event ? String($event) : null,
+              },
+            })"
+          >
+            <SelectTrigger><SelectValue placeholder="— seguir próximo padrão —" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="n in graphNodes.filter((x) => x.id !== node!.id)" :key="n.id" :value="n.id">
+                {{ n.label || n.type }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-[11px] text-muted-foreground">
+            Deixe vazio para seguir o próximo nó ligado. Escolha um nó para desviar em caso de timeout.
+          </p>
+        </div>
       </template>
 
       <!-- condition (visual editor) -->
