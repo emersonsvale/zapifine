@@ -180,7 +180,23 @@ watch(flow, (f) => {
   if (flowName.value === '') flowName.value = f.name
 })
 
+const FORK_NODE_TYPES = new Set(['condition', 'wait_reply'])
+
 onConnect((params) => {
+  if (!params.source || !params.target) return
+  if (params.source === params.target) {
+    errorMsg.value = 'Não é possível conectar um nó a ele mesmo.'
+    return
+  }
+  const src = nodes.value.find((n) => n.id === params.source)
+  const srcType = (src?.data as VfNode['data'] | undefined)?.nodeType ?? ''
+  const alreadyHasOutgoing = edges.value.some((e) => e.source === params.source)
+  if (alreadyHasOutgoing && !FORK_NODE_TYPES.has(srcType)) {
+    errorMsg.value =
+      'Este nó já tem uma saída. Só nós de condição ou aguardar resposta aceitam múltiplas saídas — encadeie as ações em sequência.'
+    return
+  }
+  errorMsg.value = null
   addEdges([{ ...params, markerEnd: MarkerType.ArrowClosed }])
 })
 
