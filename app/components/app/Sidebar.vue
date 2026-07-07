@@ -13,6 +13,7 @@ import {
   Calendar,
   RefreshCw,
   BellRing,
+  Workflow,
   CreditCard,
   Settings,
   Rocket,
@@ -58,6 +59,7 @@ const nav: Entry[] = [
     children: [
       { to: '/multiatendimento/chats', label: 'Chats', icon: MessagesSquare, minPlan: 2 },
       { to: '/follow-up', label: 'Follow-up Automático', icon: RefreshCw, minPlan: 2 },
+      { to: '/automacoes/fluxos', label: 'Fluxos', icon: Workflow, minPlan: 2 },
       { to: '/multiatendimento/configuracoes', label: 'Configurações', icon: Settings, minPlan: 2 },
     ],
   },
