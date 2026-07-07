@@ -325,7 +325,7 @@ const nodeTypes = { flowNode: FlowNodeCard } as unknown as NodeTypesObject
       <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
     </div>
     <div v-else class="grid flex-1 grid-cols-[220px_1fr_300px] overflow-hidden">
-      <aside class="border-r bg-muted/30">
+      <aside class="min-h-0 overflow-hidden border-r bg-muted/30">
         <NodePalette />
       </aside>
 
@@ -348,7 +348,7 @@ const nodeTypes = { flowNode: FlowNodeCard } as unknown as NodeTypesObject
         </VueFlow>
       </div>
 
-      <aside class="border-l bg-muted/30">
+      <aside class="min-h-0 overflow-hidden border-l bg-muted/30">
         <NodeInspector
           :node="selectedNode"
           :options="optionsForInspector"
