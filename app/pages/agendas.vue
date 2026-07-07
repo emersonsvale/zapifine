@@ -38,6 +38,8 @@ const syncing = ref(false)
 const calendariosSheetOpen = ref(false)
 const monthCursor = ref(new Date())
 const prefillDate = ref<string | null>(null)
+const dayDialogOpen = ref(false)
+const dayYmd = ref<string | null>(null)
 
 const {
   agendamentos,
@@ -103,10 +105,34 @@ function onSelect(ag: AgendamentoWithLead) {
   detailsOpen.value = true
 }
 
-function onNewFromDay(ymd: string) {
+function eventsForYmd(ymd: string): AgendamentoWithLead[] {
+  const [y, m, d] = ymd.split('-').map(Number)
+  return filteredAgendamentos.value.filter((a) => {
+    if (!a.gg_start) return false
+    const dt = new Date(a.gg_start)
+    if (Number.isNaN(dt.getTime())) return false
+    return dt.getFullYear() === y && dt.getMonth() + 1 === m && dt.getDate() === d
+  })
+}
+
+function onDayClick(ymd: string) {
+  if (eventsForYmd(ymd).length === 0) {
+    prefillDate.value = ymd
+    dialogOpen.value = true
+    return
+  }
+  dayYmd.value = ymd
+  dayDialogOpen.value = true
+}
+
+function onNewFromDayDialog(ymd: string) {
   prefillDate.value = ymd
   dialogOpen.value = true
 }
+
+const dayEvents = computed<AgendamentoWithLead[]>(() =>
+  dayYmd.value ? eventsForYmd(dayYmd.value) : [],
+)
 
 async function onSync() {
   syncing.value = true
@@ -218,7 +244,7 @@ async function onSync() {
             v-model:cursor="monthCursor"
             :agendamentos="filteredAgendamentos"
             @select="onSelect"
-            @day="onNewFromDay"
+            @day="onDayClick"
           />
         </TabsContent>
         <TabsContent value="lista">
@@ -267,6 +293,13 @@ async function onSync() {
       @edit="onEdit"
       @confirm="onConfirm($event.id)"
       @cancel="onCancel($event.id)"
+    />
+    <AgendasDiaAgendamentosDialog
+      v-model:open="dayDialogOpen"
+      :ymd="dayYmd"
+      :agendamentos="dayEvents"
+      @select="onSelect"
+      @new="onNewFromDayDialog"
     />
     <AgendasGoogleCalendariosSheet v-model:open="calendariosSheetOpen" />
   </div>
