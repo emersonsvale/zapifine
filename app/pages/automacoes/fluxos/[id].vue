@@ -124,15 +124,23 @@ function graphToVueFlow(graph: FlowGraph): { nodes: VfNode[]; edges: VfEdge[] } 
 }
 
 function vueFlowToGraph(): FlowGraph {
+  const nextBySource = new Map<string, string>()
+  for (const e of edges.value) {
+    if (!nextBySource.has(e.source)) nextBySource.set(e.source, e.target)
+  }
   return {
-    nodes: nodes.value.map((n) => ({
-      id: n.id,
-      type: (n.data as VfNode['data']).nodeType,
-      label: (n.data as VfNode['data']).label,
-      position: n.position,
-      config: (n.data as VfNode['data']).config,
-      next: null,
-    })),
+    nodes: nodes.value.map((n) => {
+      const nodeType = (n.data as VfNode['data']).nodeType
+      const next = nodeType === 'condition' ? null : nextBySource.get(n.id) ?? null
+      return {
+        id: n.id,
+        type: nodeType,
+        label: (n.data as VfNode['data']).label,
+        position: n.position,
+        config: (n.data as VfNode['data']).config,
+        next,
+      }
+    }),
     edges: edges.value.map((e) => ({ from: e.source, to: e.target })),
   }
 }
