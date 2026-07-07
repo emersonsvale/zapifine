@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { Trash2 } from 'lucide-vue-next'
 import { getNodeMeta } from './node-catalog'
 import ConditionEditor from './ConditionEditor.vue'
+import ButtonsEditor from './ButtonsEditor.vue'
 import type {
   FlowColumnOption,
   FlowUserOption,
@@ -36,6 +37,11 @@ const emit = defineEmits<{
 }>()
 
 const meta = computed(() => (props.node ? getNodeMeta(props.node.data.nodeType) : null))
+
+const waitReplyButtonIdHint = computed(() => {
+  const v = String(props.node?.data.config.variable ?? 'reply')
+  return `{{${v}_button_id}}`
+})
 
 function patchLabel(v: string) {
   if (!props.node) return
@@ -130,6 +136,10 @@ function replaceConfig(next: Record<string, unknown>) {
             placeholder="reply"
             @update:model-value="patchConfig({ variable: String($event) })"
           />
+          <p class="text-[11px] text-muted-foreground">
+            Se o lead clicar em botão, o ID vai em
+            <code>{{ waitReplyButtonIdHint }}</code>.
+          </p>
         </div>
         <div class="space-y-1">
           <Label class="text-xs">Timeout (segundos)</Label>
@@ -194,6 +204,31 @@ function replaceConfig(next: Record<string, unknown>) {
             @input="patchConfig({ caption: ($event.target as HTMLTextAreaElement).value })"
           />
         </div>
+      </template>
+
+      <!-- send_buttons -->
+      <template v-if="node.data.nodeType === 'send_buttons'">
+        <div class="space-y-1">
+          <Label class="text-xs">Mensagem</Label>
+          <textarea
+            class="min-h-20 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            :value="String(node.data.config.text ?? '')"
+            :placeholder="'Escolha uma opção para seu atendimento'"
+            @input="patchConfig({ text: ($event.target as HTMLTextAreaElement).value })"
+          />
+        </div>
+        <div class="space-y-1">
+          <Label class="text-xs">Rodapé (opcional)</Label>
+          <Input
+            :model-value="String(node.data.config.footer_text ?? '')"
+            placeholder="Rodapé curto"
+            @update:model-value="patchConfig({ footer_text: String($event) })"
+          />
+        </div>
+        <ButtonsEditor
+          :buttons="node.data.config.buttons"
+          @update="(next) => patchConfig({ buttons: next })"
+        />
       </template>
 
       <!-- send_link -->

@@ -10,6 +10,7 @@ import {
   FileText,
   Video,
   Link as LinkIcon,
+  MousePointerClick,
   MoveRight,
   Tag,
   Tags,
@@ -97,6 +98,15 @@ export const NODE_CATALOG: NodeCatalogEntry[] = [
     color: 'bg-emerald-500',
     category: 'action',
     defaultConfig: { url: '', text: '' },
+  },
+  {
+    type: 'send_buttons',
+    label: 'Enviar botões',
+    description: 'Menu com até 3 botões',
+    icon: MousePointerClick,
+    color: 'bg-emerald-500',
+    category: 'action',
+    defaultConfig: { text: '', footer_text: '', buttons: [] },
   },
   {
     type: 'wait_delay',
