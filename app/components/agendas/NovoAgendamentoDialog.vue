@@ -11,6 +11,21 @@ const props = defineProps<{
   prefillDate?: string | null
 }>()
 
+export type AgendaCreatedData = {
+  title: string
+  start: string
+  end: string
+  durationHours: string
+  description: string | null
+  location: string | null
+  meetLink: string | null
+  googleLink: string | null
+}
+
+const emit = defineEmits<{
+  created: [data: AgendaCreatedData]
+}>()
+
 const { leads } = useLeads()
 const { createEvent } = useAgendamentos()
 const { confirm: confirmDialog } = useAlerts()
@@ -184,7 +199,7 @@ async function submit() {
   }
 
   async function tryCreate(force: boolean) {
-    await createEvent({
+    const result = await createEvent({
       title: form.title.trim(),
       description: form.description.trim() || null,
       location: form.location.trim() || null,
@@ -196,6 +211,16 @@ async function submit() {
       lead_id: form.lead_id ? Number(form.lead_id) : null,
       google_calendar_id: form.google_calendar_id || null,
       force_outside_availability: force,
+    })
+    emit('created', {
+      title: form.title.trim(),
+      start: startIso,
+      end: endIso,
+      durationHours: form.durationHours,
+      description: form.description.trim() || null,
+      location: form.location.trim() || null,
+      meetLink: result.meetLink ?? null,
+      googleLink: result.link ?? null,
     })
   }
 }

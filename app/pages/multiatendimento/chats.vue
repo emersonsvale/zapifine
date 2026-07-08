@@ -644,6 +644,59 @@ const agendaPrefillTitle = computed(() => {
   return name ? `Atendimento — ${name}` : null
 })
 
+const dateFmt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'long' })
+const timeFmt = new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+function formatDuration(hours: string): string {
+  const h = Number(hours)
+  if (h === 0.5) return '30min'
+  if (h === 1) return '1h'
+  if (h < 1) return `${Math.round(h * 60)}min`
+  const whole = Math.floor(h)
+  const frac = h - whole
+  if (frac === 0) return `${whole}h`
+  return `${whole}h${Math.round(frac * 60)}min`
+}
+
+async function onAgendaCreated(data: {
+  title: string
+  start: string
+  end: string
+  durationHours: string
+  description: string | null
+  location: string | null
+  meetLink: string | null
+  googleLink: string | null
+}) {
+  const lines: string[] = []
+  lines.push('📅 *Agendamento criado*')
+  lines.push('')
+  lines.push(`*Título:* ${data.title}`)
+  lines.push(`*Data:* ${dateFmt.format(new Date(data.start))}`)
+  lines.push(`*Horário:* ${timeFmt.format(new Date(data.start))} às ${timeFmt.format(new Date(data.end))} (${formatDuration(data.durationHours)})`)
+  if (data.description) {
+    lines.push('')
+    lines.push(data.description)
+  }
+  if (data.location) {
+    lines.push('')
+    lines.push(`*Local:* ${data.location}`)
+  }
+  if (data.meetLink) {
+    lines.push('')
+    lines.push(`🔗 *Google Meet:* ${data.meetLink}`)
+  }
+  if (data.googleLink) {
+    lines.push(`📋 *Agenda:* ${data.googleLink}`)
+  }
+
+  try {
+    await sendText(lines.join('\n'))
+  } catch {
+    // não travar fluxo se falhar envio
+  }
+}
+
 async function onConclude(colunaId: number) {
   const leadId = leadForDialog.value?.id
   if (!leadId || moving.value) return
@@ -1275,6 +1328,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       v-model:open="agendaOpen"
       :prefill-lead-id="selectedConversation?.leads?.id ?? null"
       :prefill-title="agendaPrefillTitle"
+      @created="onAgendaCreated"
     />
   </div>
 </template>
