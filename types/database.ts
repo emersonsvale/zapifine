@@ -1239,6 +1239,7 @@ export type Database = {
           funil_id: number | null
           id: number
           nome_coluna: string | null
+          position: number | null
           role: string | null
           user_id: string | null
         }
@@ -1249,6 +1250,7 @@ export type Database = {
           funil_id?: number | null
           id?: number
           nome_coluna?: string | null
+          position?: number | null
           role?: string | null
           user_id?: string | null
         }
@@ -1259,6 +1261,7 @@ export type Database = {
           funil_id?: number | null
           id?: number
           nome_coluna?: string | null
+          position?: number | null
           role?: string | null
           user_id?: string | null
         }

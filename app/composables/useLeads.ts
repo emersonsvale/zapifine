@@ -53,6 +53,7 @@ export function useLeads() {
         .from('ff_colunas_funil')
         .select('*')
         .eq('funil_id', target)
+        .order('position', { ascending: true, nullsFirst: false })
         .order('id', { ascending: true })
       if (error) throw error
       return data ?? []
@@ -339,6 +340,17 @@ export function useLeads() {
     await refreshLeads()
   }
 
+  async function reorderColunas(orderedIds: number[]): Promise<void> {
+    const targetFunil = activeFunilId.value ?? ctx.value.funilId
+    if (!targetFunil) throw new Error('Funil ativo não definido.')
+    const { error } = await supabase.rpc('reorder_funil_colunas' as never, {
+      p_funil_id: targetFunil,
+      p_ids: orderedIds,
+    } as never)
+    if (error) throw error
+    await refreshColumns()
+  }
+
   async function moveLeadToFunil(leadId: number, targetFunilId: number): Promise<void> {
     const lead = leads.value?.find((l) => l.id === leadId)
     if (!lead) throw new Error('Lead não encontrado.')
@@ -408,6 +420,7 @@ export function useLeads() {
     createColuna,
     updateColuna,
     deleteColuna,
+    reorderColunas,
     moveLeadToFunil,
     getOrCreateConversationForLead,
     refreshLeads,

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Plus, Rocket, MoreVertical, Pencil, Trash2, Lock } from 'lucide-vue-next'
+import { Plus, Rocket, MoreVertical, Pencil, Trash2, Lock, GripVertical } from 'lucide-vue-next'
 import { VueDraggable } from 'vue-draggable-plus'
 import type { Database } from '~~/types/database'
 
@@ -19,6 +19,8 @@ const {
   moveLead,
   toggleIa,
   refreshLeads,
+  refreshColumns,
+  reorderColunas,
   funilId,
   leadsPending,
   columnsPending,
@@ -95,6 +97,27 @@ function rebuild() {
 watch([columns, leads], rebuild, { immediate: true })
 
 const errorMsg = ref('')
+
+const orderedColumns = ref<Column[]>([])
+watch(
+  columns,
+  (v) => {
+    orderedColumns.value = (v ?? []).slice()
+  },
+  { immediate: true },
+)
+
+async function onReorderColunas() {
+  if (!isOwner.value) return
+  const ids = orderedColumns.value.map((c) => c.id)
+  try {
+    await reorderColunas(ids)
+  } catch (err) {
+    errorMsg.value =
+      err instanceof Error ? err.message : 'Falha ao reordenar colunas.'
+    await refreshColumns()
+  }
+}
 
 type SortableAddEvent = {
   newIndex?: number
@@ -339,16 +362,34 @@ function formatValor(v: number): string {
     </div>
 
     <div v-else class="flex-1 overflow-x-auto pb-2">
-      <div class="flex h-full min-w-max gap-4">
-        <div
-          v-for="col in columns ?? []"
-          :key="col.id"
-          class="flex h-full w-[320px] shrink-0 flex-col rounded-lg border bg-muted/20"
+      <ClientOnly>
+        <VueDraggable
+          v-model="orderedColumns"
+          :animation="150"
+          :disabled="!isOwner"
+          handle=".coluna-drag-handle"
+          ghost-class="drag-ghost"
+          drag-class="drag-active"
+          class="flex h-full min-w-max gap-4"
+          @end="onReorderColunas"
         >
-          <div class="border-b px-4 py-3">
+          <div
+            v-for="col in orderedColumns"
+            :key="col.id"
+            class="flex h-full w-[320px] shrink-0 flex-col rounded-lg border bg-muted/20"
+          >
+          <div
+            class="border-b px-4 py-3"
+            :class="isOwner ? 'coluna-drag-handle cursor-grab active:cursor-grabbing' : ''"
+          >
             <div class="flex items-center justify-between gap-2">
               <div class="min-w-0">
                 <p class="flex items-center gap-1.5 truncate text-sm font-semibold">
+                  <GripVertical
+                    v-if="isOwner"
+                    class="h-3 w-3 shrink-0 text-muted-foreground"
+                    :title="'Arraste para reordenar'"
+                  />
                   <Lock
                     v-if="col.role"
                     class="h-3 w-3 shrink-0 text-muted-foreground"
@@ -460,8 +501,9 @@ function formatValor(v: number): string {
               Adicionar Lead
             </Button>
           </div>
-        </div>
-      </div>
+          </div>
+        </VueDraggable>
+      </ClientOnly>
     </div>
 
     <LeadsAddLeadDialog
