@@ -36,9 +36,32 @@ const createFunilOpen = ref(false)
 const renameFunilOpen = ref(false)
 const deleteFunilOpen = ref(false)
 
+const colunaFormOpen = ref(false)
+const colunaFormMode = ref<'create' | 'edit'>('create')
+const colunaEdit = ref<Column | null>(null)
+const colunaDeleteOpen = ref(false)
+const colunaDelete = ref<Column | null>(null)
+
 function onSelectFunil(v: unknown) {
   if (!v) return
   activeFunilId.value = Number(v)
+}
+
+function openCreateColuna() {
+  colunaFormMode.value = 'create'
+  colunaEdit.value = null
+  colunaFormOpen.value = true
+}
+
+function openEditColuna(col: Column) {
+  colunaFormMode.value = 'edit'
+  colunaEdit.value = col
+  colunaFormOpen.value = true
+}
+
+function openDeleteColuna(col: Column) {
+  colunaDelete.value = col
+  colunaDeleteOpen.value = true
 }
 
 // reactive container keyed by column id — mutated in place so that
@@ -208,6 +231,15 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
         </Button>
 
         <Button
+          v-if="isOwner && activeFunil"
+          variant="outline"
+          @click="openCreateColuna"
+        >
+          <Plus class="h-4 w-4" />
+          Nova coluna
+        </Button>
+
+        <Button
           v-if="firstColumn"
           @click="openAddLead(firstColumn)"
         >
@@ -271,9 +303,36 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
                 {{ col.descricao }}
               </p>
             </div>
-            <Badge variant="secondary">
-              {{ grouped[col.id]?.length ?? 0 }}
-            </Badge>
+            <div class="flex items-center gap-1.5">
+              <Badge variant="secondary">
+                {{ grouped[col.id]?.length ?? 0 }}
+              </Badge>
+              <DropdownMenu v-if="isOwner && !col.role">
+                <DropdownMenuTrigger as-child>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="h-7 w-7"
+                    aria-label="Ações da coluna"
+                  >
+                    <MoreVertical class="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem @select="openEditColuna(col)">
+                    <Pencil class="h-4 w-4" />
+                    Editar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    class="text-destructive focus:text-destructive"
+                    @select="openDeleteColuna(col)"
+                  >
+                    <Trash2 class="h-4 w-4" />
+                    Excluir
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
 
           <div class="flex-1 overflow-y-auto px-3 py-3">
@@ -346,6 +405,17 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
       v-model:open="deleteFunilOpen"
       :funil-id="activeFunil?.id ?? null"
       :funil-nome="activeFunil?.nome_funil ?? null"
+    />
+
+    <FunisColunaFormDialog
+      v-model:open="colunaFormOpen"
+      :mode="colunaFormMode"
+      :coluna="colunaEdit"
+    />
+
+    <FunisColunaDeleteDialog
+      v-model:open="colunaDeleteOpen"
+      :coluna="colunaDelete"
     />
   </div>
 </template>

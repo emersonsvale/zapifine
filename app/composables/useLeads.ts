@@ -259,6 +259,86 @@ export function useLeads() {
     return { lead, remoteJid }
   }
 
+  async function createColuna(input: { nome: string; descricao?: string }): Promise<ColumnRow> {
+    const targetFunil = activeFunilId.value ?? ctx.value.funilId
+    if (!ctx.value.companyId || !targetFunil) {
+      throw new Error('Empresa ou funil não configurado.')
+    }
+    const nome = input.nome.trim()
+    if (!nome) throw new Error('Nome da coluna obrigatório.')
+    const { data, error } = await supabase
+      .from('ff_colunas_funil')
+      .insert({
+        nome_coluna: nome,
+        descricao: input.descricao?.trim() || null,
+        funil_id: targetFunil,
+        companie_id: ctx.value.companyId,
+        user_id: authUser.value?.id ?? null,
+      })
+      .select('*')
+      .maybeSingle()
+    if (error) throw error
+    if (!data) {
+      throw new Error('INSERT bloqueado pelo RLS (requer OWNER).')
+    }
+    await refreshColumns()
+    return data as ColumnRow
+  }
+
+  async function updateColuna(
+    id: number,
+    patch: { nome?: string; descricao?: string | null },
+  ): Promise<void> {
+    const update: Database['public']['Tables']['ff_colunas_funil']['Update'] = {}
+    if (patch.nome !== undefined) {
+      const nome = patch.nome.trim()
+      if (!nome) throw new Error('Nome da coluna obrigatório.')
+      update.nome_coluna = nome
+    }
+    if (patch.descricao !== undefined) {
+      update.descricao = patch.descricao?.trim() || null
+    }
+    const { data, error } = await supabase
+      .from('ff_colunas_funil')
+      .update(update)
+      .eq('id', id)
+      .select('id')
+    if (error) throw error
+    if (!data || data.length === 0) {
+      throw new Error('UPDATE bloqueado. Colunas fixas não podem ser editadas.')
+    }
+    await refreshColumns()
+  }
+
+  async function deleteColuna(id: number): Promise<void> {
+    const cols = columns.value ?? []
+    const target = cols.find((c) => c.id === id)
+    if (!target) throw new Error('Coluna não encontrada.')
+    if (target.role) throw new Error('Colunas fixas não podem ser excluídas.')
+
+    const novoCol = cols.find((c) => c.role === 'novo')
+    if (!novoCol) throw new Error('Coluna "Novo" não encontrada no funil.')
+
+    // Move leads pra coluna "Novo" antes de excluir (FK ON DELETE seria RESTRICT).
+    const { error: mvErr } = await supabase
+      .from('leads')
+      .update({ coluna_id: novoCol.id })
+      .eq('coluna_id', id)
+    if (mvErr) throw mvErr
+
+    const { data, error } = await supabase
+      .from('ff_colunas_funil')
+      .delete()
+      .eq('id', id)
+      .select('id')
+    if (error) throw error
+    if (!data || data.length === 0) {
+      throw new Error('DELETE bloqueado pelo RLS (requer OWNER).')
+    }
+    await refreshColumns()
+    await refreshLeads()
+  }
+
   async function getOrCreateConversationForLead(leadId: number) {
     const { remoteJid } = await ensureLeadRemoteJid(leadId)
     const cid = ctx.value.companyId ?? (await loadContext()).companyId
@@ -298,6 +378,9 @@ export function useLeads() {
     deleteLead,
     updateLead,
     toggleIa,
+    createColuna,
+    updateColuna,
+    deleteColuna,
     getOrCreateConversationForLead,
     refreshLeads,
     refreshColumns,
