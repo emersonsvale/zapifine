@@ -69,6 +69,7 @@ const nav: Entry[] = [
     type: 'group',
     label: 'CRM',
     icon: UsersRound,
+    to: '/crm/funis',
     children: [
       { to: '/crm/funis', label: 'Funis', icon: GitBranch },
       { to: '/crm/leads', label: 'Gestão de Leads', icon: List },
