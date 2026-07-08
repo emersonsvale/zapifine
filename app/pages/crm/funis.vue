@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { Plus, Rocket } from 'lucide-vue-next'
+import { Plus, Rocket, MoreVertical, Pencil, Trash2, Lock } from 'lucide-vue-next'
 import { VueDraggable } from 'vue-draggable-plus'
 import type { Database } from '~~/types/database'
 
@@ -23,6 +23,23 @@ const {
   leadsPending,
   columnsPending,
 } = useLeads()
+
+const {
+  funis,
+  activeFunilId,
+  activeFunil,
+  isOwner,
+  isDefaultFunil,
+} = useFunis()
+
+const createFunilOpen = ref(false)
+const renameFunilOpen = ref(false)
+const deleteFunilOpen = ref(false)
+
+function onSelectFunil(v: unknown) {
+  if (!v) return
+  activeFunilId.value = Number(v)
+}
 
 // reactive container keyed by column id — mutated in place so that
 // vue-draggable-plus can reorder without us replacing array references.
@@ -131,20 +148,73 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
 
 <template>
   <div class="flex h-full flex-col gap-6">
-    <div class="flex items-center justify-between gap-4">
-      <div>
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div class="min-w-0">
         <h1 class="text-3xl font-semibold tracking-tight">Funis</h1>
         <p class="mt-1 text-sm text-muted-foreground">
           Arraste os cards entre colunas para mudar o estágio.
         </p>
       </div>
-      <Button
-        v-if="firstColumn"
-        @click="openAddLead(firstColumn)"
-      >
-        <Plus class="h-4 w-4" />
-        Novo Lead
-      </Button>
+      <div class="flex flex-wrap items-center gap-2">
+        <Select
+          v-if="(funis ?? []).length"
+          :model-value="activeFunilId != null ? String(activeFunilId) : undefined"
+          @update:model-value="onSelectFunil"
+        >
+          <SelectTrigger class="w-[240px]">
+            <SelectValue placeholder="Selecione um funil" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem
+              v-for="f in funis ?? []"
+              :key="f.id"
+              :value="String(f.id)"
+            >
+              <span class="flex items-center gap-2">
+                {{ f.nome_funil ?? 'Sem nome' }}
+                <Badge v-if="isDefaultFunil(f.id)" variant="secondary" class="text-[10px]">
+                  Padrão
+                </Badge>
+              </span>
+            </SelectItem>
+          </SelectContent>
+        </Select>
+
+        <DropdownMenu v-if="isOwner && activeFunil">
+          <DropdownMenuTrigger as-child>
+            <Button variant="outline" size="icon" aria-label="Ações do funil">
+              <MoreVertical class="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem @select="renameFunilOpen = true">
+              <Pencil class="h-4 w-4" />
+              Renomear funil
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              :disabled="isDefaultFunil(activeFunilId)"
+              class="text-destructive focus:text-destructive"
+              @select="deleteFunilOpen = true"
+            >
+              <Trash2 class="h-4 w-4" />
+              Excluir funil
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <Button v-if="isOwner" variant="outline" @click="createFunilOpen = true">
+          <Plus class="h-4 w-4" />
+          Novo funil
+        </Button>
+
+        <Button
+          v-if="firstColumn"
+          @click="openAddLead(firstColumn)"
+        >
+          <Plus class="h-4 w-4" />
+          Novo Lead
+        </Button>
+      </div>
     </div>
 
     <p
@@ -186,7 +256,12 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
         >
           <div class="flex items-center justify-between border-b px-4 py-3">
             <div class="min-w-0">
-              <p class="truncate text-sm font-semibold">
+              <p class="flex items-center gap-1.5 truncate text-sm font-semibold">
+                <Lock
+                  v-if="col.role"
+                  class="h-3 w-3 shrink-0 text-muted-foreground"
+                  :title="'Coluna fixa (' + col.role + ')'"
+                />
                 {{ col.nome_coluna ?? 'Sem nome' }}
               </p>
               <p
@@ -257,6 +332,20 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
       v-model:open="editOpen"
       :lead="editLead"
       :columns="columns ?? []"
+    />
+
+    <FunisFunilCreateDialog v-model:open="createFunilOpen" />
+
+    <FunisFunilRenameDialog
+      v-model:open="renameFunilOpen"
+      :funil-id="activeFunil?.id ?? null"
+      :funil-nome="activeFunil?.nome_funil ?? null"
+    />
+
+    <FunisFunilDeleteDialog
+      v-model:open="deleteFunilOpen"
+      :funil-id="activeFunil?.id ?? null"
+      :funil-nome="activeFunil?.nome_funil ?? null"
     />
   </div>
 </template>

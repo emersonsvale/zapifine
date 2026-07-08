@@ -31,8 +31,9 @@ export function useLeads() {
     companyId: null,
     funilId: null,
   }))
+  const activeFunilId = useState<number | null>('active-funil-id', () => null)
   const companyId = computed(() => ctx.value.companyId)
-  const funilId = computed(() => ctx.value.funilId)
+  const funilId = computed(() => activeFunilId.value ?? ctx.value.funilId)
 
   const {
     data: columns,
@@ -43,16 +44,20 @@ export function useLeads() {
     async () => {
       const c = await loadContext()
       ctx.value = c
-      if (!c.funilId) return []
+      if (activeFunilId.value == null && c.funilId != null) {
+        activeFunilId.value = c.funilId
+      }
+      const target = activeFunilId.value ?? c.funilId
+      if (!target) return []
       const { data, error } = await supabase
         .from('ff_colunas_funil')
         .select('*')
-        .eq('funil_id', c.funilId)
+        .eq('funil_id', target)
         .order('id', { ascending: true })
       if (error) throw error
       return data ?? []
     },
-    { watch: [() => authUser.value?.id], default: () => [] },
+    { watch: [() => authUser.value?.id, activeFunilId], default: () => [] },
   )
 
   const {
@@ -65,18 +70,20 @@ export function useLeads() {
       const c = ctx.value.companyId ? ctx.value : await loadContext()
       if (!ctx.value.companyId && c.companyId) ctx.value = c
       if (!c.companyId) return []
-      const { data, error } = await supabase
+      const target = activeFunilId.value ?? c.funilId
+      let query = supabase
         .from('leads')
         .select('*')
         .eq('companies_id', c.companyId)
-        .order('ultima_interacao_lead', {
-          ascending: false,
-          nullsFirst: false,
-        })
+      if (target != null) query = query.eq('funil_id', target)
+      const { data, error } = await query.order('ultima_interacao_lead', {
+        ascending: false,
+        nullsFirst: false,
+      })
       if (error) throw error
       return data ?? []
     },
-    { watch: [() => authUser.value?.id], default: () => [] },
+    { watch: [() => authUser.value?.id, activeFunilId], default: () => [] },
   )
 
   function leadsByColumn(colunaId: number) {
@@ -117,7 +124,8 @@ export function useLeads() {
     colunaId: number
     observacao?: string
   }): Promise<LeadRow> {
-    if (!ctx.value.companyId || !ctx.value.funilId) {
+    const targetFunil = activeFunilId.value ?? ctx.value.funilId
+    if (!ctx.value.companyId || !targetFunil) {
       throw new Error('Empresa ou funil não configurado.')
     }
     const { data, error } = await supabase
@@ -128,7 +136,7 @@ export function useLeads() {
         'e-mail': input.email?.trim() || null,
         observacao: input.observacao?.trim() || null,
         coluna_id: input.colunaId,
-        funil_id: ctx.value.funilId,
+        funil_id: targetFunil,
         companies_id: ctx.value.companyId,
         user_id: authUser.value?.id ?? null,
         ia_ativa: true,

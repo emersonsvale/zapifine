@@ -1239,6 +1239,7 @@ export type Database = {
           funil_id: number | null
           id: number
           nome_coluna: string | null
+          role: string | null
           user_id: string | null
         }
         Insert: {
@@ -1248,6 +1249,7 @@ export type Database = {
           funil_id?: number | null
           id?: number
           nome_coluna?: string | null
+          role?: string | null
           user_id?: string | null
         }
         Update: {
@@ -1257,6 +1259,7 @@ export type Database = {
           funil_id?: number | null
           id?: number
           nome_coluna?: string | null
+          role?: string | null
           user_id?: string | null
         }
         Relationships: [
