@@ -339,6 +339,33 @@ export function useLeads() {
     await refreshLeads()
   }
 
+  async function moveLeadToFunil(leadId: number, targetFunilId: number): Promise<void> {
+    const lead = leads.value?.find((l) => l.id === leadId)
+    if (!lead) throw new Error('Lead não encontrado.')
+    if (lead.funil_id === targetFunilId) return
+
+    const { data: novoCol, error: colErr } = await supabase
+      .from('ff_colunas_funil')
+      .select('id')
+      .eq('funil_id', targetFunilId)
+      .eq('role', 'novo')
+      .limit(1)
+      .maybeSingle()
+    if (colErr) throw colErr
+    if (!novoCol) throw new Error('Funil destino sem coluna "Novo".')
+
+    const { data, error } = await supabase
+      .from('leads')
+      .update({ funil_id: targetFunilId, coluna_id: novoCol.id })
+      .eq('id', leadId)
+      .select('id')
+    if (error) throw error
+    if (!data || data.length === 0) {
+      throw new Error('UPDATE bloqueado pelo RLS.')
+    }
+    await refreshLeads()
+  }
+
   async function getOrCreateConversationForLead(leadId: number) {
     const { remoteJid } = await ensureLeadRemoteJid(leadId)
     const cid = ctx.value.companyId ?? (await loadContext()).companyId
@@ -381,6 +408,7 @@ export function useLeads() {
     createColuna,
     updateColuna,
     deleteColuna,
+    moveLeadToFunil,
     getOrCreateConversationForLead,
     refreshLeads,
     refreshColumns,

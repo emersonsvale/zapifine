@@ -36,8 +36,27 @@ const emit = defineEmits<{
   (e: 'deleted', id: number): void
 }>()
 
-const { updateLead, deleteLead, toggleIa, leads: allLeads } = useLeads()
+const { updateLead, deleteLead, toggleIa, leads: allLeads, moveLeadToFunil } = useLeads()
+const { funis } = useFunis()
 const { toast, confirm } = useAlerts()
+
+const movingFunil = ref(false)
+
+async function onChangeFunil(v: unknown) {
+  if (!v || !props.lead) return
+  const targetId = Number(v)
+  if (Number.isNaN(targetId) || targetId === props.lead.funil_id) return
+  movingFunil.value = true
+  try {
+    await moveLeadToFunil(props.lead.id, targetId)
+    toast.success('Lead movido para outro funil.')
+    open.value = false
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
+  } finally {
+    movingFunil.value = false
+  }
+}
 
 const tagSuggestions = computed<string[]>(() => {
   const seen = new Set<string>()
@@ -551,6 +570,29 @@ const colunaOptions = computed(() =>
 
           <!-- NEGÓCIO -->
           <TabsContent value="negocio" class="space-y-4 mt-0">
+            <FieldRow label="Funil" :icon="Target">
+              <Select
+                :model-value="lead?.funil_id != null ? String(lead.funil_id) : undefined"
+                :disabled="movingFunil"
+                @update:model-value="onChangeFunil"
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o funil" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem
+                    v-for="f in funis ?? []"
+                    :key="f.id"
+                    :value="String(f.id)"
+                  >
+                    {{ f.nome_funil ?? 'Sem nome' }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="mt-1 text-[11px] text-muted-foreground">
+                Mover para outro funil coloca o lead na coluna "Novo" desse funil.
+              </p>
+            </FieldRow>
             <FieldRow label="Etapa do funil" :icon="Target">
               <Select
                 :model-value="form.coluna_id != null ? String(form.coluna_id) : ''"

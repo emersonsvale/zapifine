@@ -32,6 +32,11 @@ const {
   isDefaultFunil,
 } = useFunis()
 
+const { unreadFor, refreshStats } = useKanbanStats()
+
+// Refresca stats sempre que leads muda (ex: após mover/criar)
+watch(leads, () => { refreshStats() })
+
 const createFunilOpen = ref(false)
 const renameFunilOpen = ref(false)
 const deleteFunilOpen = ref(false)
@@ -167,6 +172,60 @@ function openAddLead(col: Column) {
 }
 
 const firstColumn = computed(() => columns.value?.[0] ?? null)
+
+const currencyFmt = new Intl.NumberFormat('pt-BR', {
+  style: 'currency',
+  currency: 'BRL',
+  maximumFractionDigits: 0,
+})
+
+type ColStats = { count: number; unread: number; valor: number; avgSeconds: number }
+
+const statsByColumn = computed<Record<number, ColStats>>(() => {
+  const out: Record<number, ColStats> = {}
+  const nowMs = Date.now()
+  for (const col of columns.value ?? []) {
+    const list = grouped[col.id] ?? []
+    let valor = 0
+    let unread = 0
+    let ageSum = 0
+    let ageCount = 0
+    for (const l of list) {
+      valor += Number(l.valor_negocio ?? 0) || 0
+      unread += unreadFor(l.id)
+      const since = (l as unknown as { stage_since?: string | null }).stage_since
+      if (since) {
+        const t = new Date(since).getTime()
+        if (!Number.isNaN(t)) {
+          ageSum += Math.max(0, nowMs - t)
+          ageCount += 1
+        }
+      }
+    }
+    out[col.id] = {
+      count: list.length,
+      unread,
+      valor,
+      avgSeconds: ageCount ? Math.round(ageSum / ageCount / 1000) : 0,
+    }
+  }
+  return out
+})
+
+function formatDuration(seconds: number): string {
+  if (!seconds) return '—'
+  const d = Math.floor(seconds / 86400)
+  if (d >= 1) return `${d}d`
+  const h = Math.floor(seconds / 3600)
+  if (h >= 1) return `${h}h`
+  const m = Math.floor(seconds / 60)
+  if (m >= 1) return `${m}min`
+  return `${seconds}s`
+}
+
+function formatValor(v: number): string {
+  return v > 0 ? currencyFmt.format(v) : '—'
+}
 </script>
 
 <template>
@@ -286,27 +345,24 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
           :key="col.id"
           class="flex h-full w-[320px] shrink-0 flex-col rounded-lg border bg-muted/20"
         >
-          <div class="flex items-center justify-between border-b px-4 py-3">
-            <div class="min-w-0">
-              <p class="flex items-center gap-1.5 truncate text-sm font-semibold">
-                <Lock
-                  v-if="col.role"
-                  class="h-3 w-3 shrink-0 text-muted-foreground"
-                  :title="'Coluna fixa (' + col.role + ')'"
-                />
-                {{ col.nome_coluna ?? 'Sem nome' }}
-              </p>
-              <p
-                v-if="col.descricao"
-                class="mt-0.5 truncate text-[11px] text-muted-foreground"
-              >
-                {{ col.descricao }}
-              </p>
-            </div>
-            <div class="flex items-center gap-1.5">
-              <Badge variant="secondary">
-                {{ grouped[col.id]?.length ?? 0 }}
-              </Badge>
+          <div class="border-b px-4 py-3">
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <p class="flex items-center gap-1.5 truncate text-sm font-semibold">
+                  <Lock
+                    v-if="col.role"
+                    class="h-3 w-3 shrink-0 text-muted-foreground"
+                    :title="'Coluna fixa (' + col.role + ')'"
+                  />
+                  {{ col.nome_coluna ?? 'Sem nome' }}
+                </p>
+                <p
+                  v-if="col.descricao"
+                  class="mt-0.5 truncate text-[11px] text-muted-foreground"
+                >
+                  {{ col.descricao }}
+                </p>
+              </div>
               <DropdownMenu v-if="isOwner && !col.role">
                 <DropdownMenuTrigger as-child>
                   <Button
@@ -333,6 +389,33 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
+            <div class="mt-2 grid grid-cols-4 gap-1 text-[10px]">
+              <div class="rounded bg-muted/40 px-1.5 py-1" title="Leads na coluna">
+                <p class="text-muted-foreground">Leads</p>
+                <p class="text-sm font-semibold">{{ statsByColumn[col.id]?.count ?? 0 }}</p>
+              </div>
+              <div class="rounded bg-muted/40 px-1.5 py-1" title="Mensagens não lidas">
+                <p class="text-muted-foreground">Não lidas</p>
+                <p
+                  class="text-sm font-semibold"
+                  :class="(statsByColumn[col.id]?.unread ?? 0) > 0 ? 'text-emerald-500' : ''"
+                >
+                  {{ statsByColumn[col.id]?.unread ?? 0 }}
+                </p>
+              </div>
+              <div class="rounded bg-muted/40 px-1.5 py-1" title="Soma de valores negociados">
+                <p class="text-muted-foreground">Valor</p>
+                <p class="truncate text-sm font-semibold">
+                  {{ formatValor(statsByColumn[col.id]?.valor ?? 0) }}
+                </p>
+              </div>
+              <div class="rounded bg-muted/40 px-1.5 py-1" title="Tempo médio no estágio">
+                <p class="text-muted-foreground">Tempo méd.</p>
+                <p class="text-sm font-semibold">
+                  {{ formatDuration(statsByColumn[col.id]?.avgSeconds ?? 0) }}
+                </p>
+              </div>
+            </div>
           </div>
 
           <div class="flex-1 overflow-y-auto px-3 py-3">
@@ -350,6 +433,7 @@ const firstColumn = computed(() => columns.value?.[0] ?? null)
                   v-for="lead in grouped[col.id] ?? []"
                   :key="lead.id"
                   :lead="lead"
+                  :unread="unreadFor(lead.id)"
                   @toggle-ia="handleToggleIa"
                   @open-conversation="openConversation"
                   @click="openEditLead"

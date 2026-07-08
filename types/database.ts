@@ -1654,6 +1654,7 @@ export type Database = {
           cnpj: string | null
           coluna_id: number | null
           companies_id: string | null
+          stage_since?: string | null
           complemento: string | null
           cpf: string | null
           created_at: string
