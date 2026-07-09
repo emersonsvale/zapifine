@@ -123,10 +123,13 @@ create index if not exists idx_flow_exec_conversa_active
   where status in ('running','waiting_message','waiting_timer');
 
 -- Uma execução ativa por conversa (regra de negócio).
+-- Subfluxos (triggered_by = 'sub_flow') são excluídos para permitir
+-- que o nó start_flow crie execução filha com mesmo conversa_id do pai.
 create unique index if not exists ux_flow_exec_one_active_per_conversa
   on public.flow_executions (conversa_id)
   where status in ('running','waiting_message','waiting_timer')
-    and conversa_id is not null;
+    and conversa_id is not null
+    and triggered_by != 'sub_flow';
 
 create index if not exists idx_flow_exec_waiting_timer
   on public.flow_executions (waiting_until)
