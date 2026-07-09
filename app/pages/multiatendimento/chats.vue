@@ -249,7 +249,8 @@ async function onSendRich(
   }
 }
 
-const { leads, columns, refreshLeads, moveLead } = useLeads()
+const { leads, columns, refreshLeads, moveLead, moveLeadToFunil } = useLeads()
+const { funis } = useFunis()
 const { toast, confirm } = useAlerts()
 
 const tagsByLeadId = computed<Record<number, string[]>>(() => {
@@ -631,12 +632,33 @@ const currentLeadColumnId = computed<number | null>(
   () => leadForDialog.value?.coluna_id ?? null,
 )
 
+const currentLeadColumnName = computed(() => {
+  const id = currentLeadColumnId.value
+  if (id == null) return null
+  return (columns.value ?? []).find((c) => c.id === id)?.nome_coluna ?? null
+})
+
+const currentLeadFunilId = computed<number | null>(
+  () => leadForDialog.value?.funil_id ?? null,
+)
+
+const currentLeadFunilName = computed(() => {
+  const id = currentLeadFunilId.value
+  if (id == null) return null
+  return (funis.value ?? []).find((f) => f.id === id)?.nome_funil ?? null
+})
+
 const funilColumnOptions = computed(() =>
   (columns.value ?? []).filter((c) => c.id !== currentLeadColumnId.value),
 )
 
+const otherFunis = computed(() =>
+  (funis.value ?? []).filter((f) => f.id !== currentLeadFunilId.value),
+)
+
 const concludeOpen = ref(false)
 const moving = ref(false)
+const movingFunil = ref(false)
 const agendaOpen = ref(false)
 
 const agendaPrefillTitle = computed(() => {
@@ -710,6 +732,22 @@ async function onConclude(colunaId: number) {
     toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
   } finally {
     moving.value = false
+  }
+}
+
+async function onMoveToFunil(funilId: number) {
+  const leadId = leadForDialog.value?.id
+  if (!leadId || movingFunil.value) return
+  movingFunil.value = true
+  concludeOpen.value = false
+  try {
+    await moveLeadToFunil(leadId, funilId)
+    const target = (funis.value ?? []).find((f) => f.id === funilId)
+    toast.success(`Lead movido para o funil "${target?.nome_funil ?? 'funil'}".`)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
+  } finally {
+    movingFunil.value = false
   }
 }
 
@@ -974,18 +1012,18 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 variant="outline"
                 size="sm"
                 class="gap-1"
-                :disabled="!hasLead || moving || funilColumnOptions.length === 0"
-                :title="!hasLead ? 'Vincule um lead para concluir' : 'Mover lead para outra coluna do funil'"
+                :disabled="!hasLead || moving || movingFunil || (funilColumnOptions.length === 0 && otherFunis.length === 0)"
+                :title="!hasLead ? 'Vincule um lead para concluir' : 'Mover lead de coluna ou funil'"
               >
-                <Loader2 v-if="moving" class="h-4 w-4 animate-spin" />
+                <Loader2 v-if="moving || movingFunil" class="h-4 w-4 animate-spin" />
                 <CheckCircle2 v-else class="h-4 w-4" />
-                <span class="hidden text-xs sm:inline">Concluir</span>
+                <span class="hidden max-w-[120px] truncate text-xs sm:inline">{{ currentLeadColumnName ?? 'Concluir' }}</span>
                 <ChevronDown class="h-3 w-3" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-56">
-              <DropdownMenuLabel>Mover para</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              <DropdownMenuLabel v-if="funilColumnOptions.length > 0">Mover para coluna</DropdownMenuLabel>
+              <DropdownMenuSeparator v-if="funilColumnOptions.length > 0" />
               <DropdownMenuItem
                 v-for="col in funilColumnOptions"
                 :key="col.id"
@@ -995,9 +1033,23 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 <CheckCircle2 class="h-4 w-4 text-muted-foreground" />
                 {{ col.nome_coluna ?? `Coluna ${col.id}` }}
               </DropdownMenuItem>
-              <DropdownMenuItem v-if="funilColumnOptions.length === 0" disabled>
-                Nenhuma coluna disponível
+              <DropdownMenuItem v-if="funilColumnOptions.length === 0 && otherFunis.length === 0" disabled>
+                Nenhuma opção disponível
               </DropdownMenuItem>
+              <template v-if="otherFunis.length > 0">
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Mudar de funil</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  v-for="f in otherFunis"
+                  :key="f.id"
+                  :disabled="movingFunil"
+                  @select="onMoveToFunil(f.id)"
+                >
+                  <ArrowRightLeft class="h-4 w-4 text-muted-foreground" />
+                  {{ f.nome_funil ?? `Funil ${f.id}` }}
+                </DropdownMenuItem>
+              </template>
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="ghost" size="icon" title="Ligar (em breve)" disabled>
