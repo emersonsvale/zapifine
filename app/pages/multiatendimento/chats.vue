@@ -27,6 +27,7 @@ import {
   Eye,
   CheckCircle2,
   CalendarPlus,
+  Workflow,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 import { formatPhone } from '~/lib/utils'
@@ -226,14 +227,17 @@ const linkOpen = ref(false)
 const locationOpen = ref(false)
 const contactOpen = ref(false)
 const pollOpen = ref(false)
+const flowTriggerOpen = ref(false)
+const triggeringFlowId = ref<string | null>(null)
 
-function openAttachment(kind: 'media' | 'link' | 'location' | 'contact' | 'poll') {
+function openAttachment(kind: 'media' | 'link' | 'location' | 'contact' | 'poll' | 'flow') {
   attachMenuOpen.value = false
   if (kind === 'media') mediaOpen.value = true
   else if (kind === 'link') linkOpen.value = true
   else if (kind === 'location') locationOpen.value = true
   else if (kind === 'contact') contactOpen.value = true
   else if (kind === 'poll') pollOpen.value = true
+  else if (kind === 'flow') flowTriggerOpen.value = true
 }
 
 async function onSendRich(
@@ -751,6 +755,34 @@ async function onMoveToFunil(funilId: number) {
   }
 }
 
+const whatsApi = useWhatsApi()
+
+async function onTriggerFlow(flowId: string) {
+  const c = selectedConversation.value
+  if (!c || triggeringFlowId.value) return
+  const cid = companyId.value
+  if (!cid) {
+    toast.error('Empresa não identificada.')
+    return
+  }
+  triggeringFlowId.value = flowId
+  flowTriggerOpen.value = false
+  try {
+    await whatsApi.triggerFlow({
+      company_id: cid,
+      flow_id: flowId,
+      conversa_id: c.id,
+      lead_id: c.lead_id ?? null,
+      remote_jid: c.remoteJid ?? null,
+    })
+    toast.success('Fluxo iniciado.')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao iniciar fluxo.')
+  } finally {
+    triggeringFlowId.value = null
+  }
+}
+
 const headerName = computed(() => {
   const c = selectedConversation.value
   if (!c) return ''
@@ -1238,46 +1270,93 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                   <Paperclip class="h-4 w-4" />
                 </Button>
               </PopoverTrigger>
-              <PopoverContent side="top" align="start" class="w-56 p-1">
+              <PopoverContent side="top" align="start" class="w-64 p-1.5">
+                <div class="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  Enviar
+                </div>
                 <button
                   type="button"
-                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                   @click="openAttachment('media')"
                 >
-                  <ImageIcon class="h-4 w-4 text-violet-500" />
-                  Mídia (foto/vídeo/arquivo)
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                    <ImageIcon class="h-4 w-4 text-violet-500" />
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-medium">Mídia</p>
+                    <p class="text-[11px] text-muted-foreground">Foto, vídeo ou arquivo</p>
+                  </div>
                 </button>
                 <button
                   type="button"
-                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                   @click="openAttachment('link')"
                 >
-                  <LinkIcon class="h-4 w-4 text-sky-500" />
-                  Link
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/10">
+                    <LinkIcon class="h-4 w-4 text-sky-500" />
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-medium">Link</p>
+                    <p class="text-[11px] text-muted-foreground">URL com pré-visualização</p>
+                  </div>
                 </button>
                 <button
                   type="button"
-                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                   @click="openAttachment('location')"
                 >
-                  <MapPin class="h-4 w-4 text-emerald-500" />
-                  Localização
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10">
+                    <MapPin class="h-4 w-4 text-emerald-500" />
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-medium">Localização</p>
+                    <p class="text-[11px] text-muted-foreground">Coordenadas no mapa</p>
+                  </div>
                 </button>
                 <button
                   type="button"
-                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                   @click="openAttachment('contact')"
                 >
-                  <UserIcon class="h-4 w-4 text-amber-500" />
-                  Contato
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10">
+                    <UserIcon class="h-4 w-4 text-amber-500" />
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-medium">Contato</p>
+                    <p class="text-[11px] text-muted-foreground">Cartão de contato</p>
+                  </div>
                 </button>
                 <button
                   type="button"
-                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
                   @click="openAttachment('poll')"
                 >
-                  <BarChart3 class="h-4 w-4 text-pink-500" />
-                  Enquete
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-pink-500/10">
+                    <BarChart3 class="h-4 w-4 text-pink-500" />
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-medium">Enquete</p>
+                    <p class="text-[11px] text-muted-foreground">Votação com opções</p>
+                  </div>
+                </button>
+                <div class="my-1 border-t" />
+                <div class="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  Automação
+                </div>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  :disabled="triggeringFlowId !== null"
+                  @click="openAttachment('flow')"
+                >
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10">
+                    <Loader2 v-if="triggeringFlowId" class="h-4 w-4 animate-spin text-violet-500" />
+                    <Workflow v-else class="h-4 w-4 text-violet-500" />
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-medium">Fluxo</p>
+                    <p class="text-[11px] text-muted-foreground">Iniciar automação</p>
+                  </div>
                 </button>
               </PopoverContent>
             </Popover>
@@ -1381,6 +1460,11 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       :prefill-lead-id="selectedConversation?.leads?.id ?? null"
       :prefill-title="agendaPrefillTitle"
       @created="onAgendaCreated"
+    />
+
+    <ChatsFlowTriggerDialog
+      v-model:open="flowTriggerOpen"
+      @trigger="onTriggerFlow"
     />
   </div>
 </template>

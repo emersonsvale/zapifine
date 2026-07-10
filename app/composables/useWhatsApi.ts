@@ -82,6 +82,15 @@ type DeletePayload = {
   messageId: string
 }
 
+type TriggerFlowPayload = {
+  company_id: string
+  flow_id: string
+  conversa_id: number
+  lead_id?: number | null
+  remote_jid?: string | null
+  connection_id?: string
+}
+
 export function useWhatsApi() {
   const config = useRuntimeConfig()
   const base = (config.public.whatsApiUrl as string) || 'https://whats.zapifine.com'
@@ -114,5 +123,6 @@ export function useWhatsApi() {
     react: (p: ReactPayload) => call('/send/react', p),
     edit: (p: EditPayload) => call('/send/edit', p),
     del: (p: DeletePayload) => call('/send/delete', p),
+    triggerFlow: (p: TriggerFlowPayload) => call('/flow/manual-trigger', p),
   }
 }
