@@ -37,4 +37,9 @@ export default defineEventHandler(async (event) => {
   const url = new URL(`https://www.facebook.com/${graphVersion}/dialog/oauth`)
   url.searchParams.set('client_id', appId)
   url.searchParams.set('redirect_uri', redirectUri)
-  url.searchParams.s
+  url.searchParams.set('scope', scopes.join(','))
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('state', id)
+
+  await sendRedirect(event, url.toString(), 302)
+})

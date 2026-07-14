@@ -23,6 +23,9 @@ dist
 .claude/
 .mcp.json
 
+# graphify knowledge graph output
+graphify-out/
+
 # n8n workflows (contêm credenciais de dev)
 n8n-workflows/
 
