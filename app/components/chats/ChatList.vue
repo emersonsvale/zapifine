@@ -37,6 +37,7 @@ type Conv = {
   setor_id?: string | null
   setor_nome?: string | null
   setor_cor?: string | null
+  provider?: string | null
 }
 
 type Setor = { id: string; nome: string; cor: string | null }
@@ -253,6 +254,22 @@ function displayName(c: Conv) {
 function displayNumber(c: Conv) {
   if (c.isgrupo) return 'Grupo'
   return c.leads?.numero_whatsapp_lead ?? c.remoteJid ?? ''
+}
+
+function channelLabel(p: string | null | undefined): string {
+  if (!p) return ''
+  if (p.startsWith('whatsapp')) return 'WhatsApp'
+  if (p === 'instagram') return 'Instagram'
+  if (p === 'facebook') return 'Facebook'
+  return p
+}
+
+function channelColor(p: string | null | undefined): { bg: string; text: string } {
+  if (!p) return { bg: '#e2e8f0', text: '#64748b' }
+  if (p.startsWith('whatsapp')) return { bg: '#dcfce7', text: '#16a34a' }
+  if (p === 'instagram') return { bg: '#fce7f3', text: '#db2777' }
+  if (p === 'facebook') return { bg: '#dbeafe', text: '#2563eb' }
+  return { bg: '#e2e8f0', text: '#64748b' }
 }
 
 const timeFmt = new Intl.DateTimeFormat('pt-BR', {
@@ -639,6 +656,17 @@ function previewText(c: Conv) {
                 <p class="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium">
                   <Users v-if="c.isgrupo" class="h-3.5 w-3.5 shrink-0 text-sky-500" />
                   <span class="truncate">{{ displayName(c) }}</span>
+                  <span
+                    v-if="c.provider"
+                    class="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium"
+                    :style="{
+                      backgroundColor: channelColor(c.provider).bg,
+                      color: channelColor(c.provider).text,
+                    }"
+                    :title="`Canal: ${channelLabel(c.provider)}`"
+                  >
+                    {{ channelLabel(c.provider) }}
+                  </span>
                   <span
                     v-if="c.setor_nome"
                     class="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium"

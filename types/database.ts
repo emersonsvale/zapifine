@@ -3240,6 +3240,7 @@ export type Database = {
           setor_id: string
           setor_nome: string
           unread_count: number
+          provider: Database["public"]["Enums"]["enum_whatsapp_provider"] | null
         }[]
       }
       cron_google_sync: { Args: never; Returns: undefined }
