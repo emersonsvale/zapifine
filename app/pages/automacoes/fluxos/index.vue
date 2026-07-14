@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { Plus, Workflow, Loader2, Trash2, Pencil } from 'lucide-vue-next'
+import {
+  Plus,
+  Workflow,
+  Loader2,
+  Trash2,
+  Pencil,
+  MessageCircle,
+  MessagesSquare,
+  Sparkles,
+} from 'lucide-vue-next'
 import type { FlowTriggerType } from '~/composables/useFlows'
+import { FLOW_TEMPLATES, type FlowTemplate } from '~/composables/flowTemplates'
 
 useHead({ title: 'Fluxos - Zapifine' })
 
@@ -11,6 +21,7 @@ const router = useRouter()
 const dialogOpen = ref(false)
 const submitting = ref(false)
 const errorMsg = ref<string | null>(null)
+const selectedTemplateId = ref<string | null>(null)
 
 const form = ref<{
   name: string
@@ -26,6 +37,12 @@ const TRIGGER_LABELS: Record<FlowTriggerType, string> = {
   lead_in_service_message: 'Lead em atendimento enviou mensagem',
   lead_column_changed: 'Lead mudou de coluna',
   manual_chat: 'Disparo manual do chat',
+  instagram_comment: 'Comentário no Instagram',
+}
+
+const TEMPLATE_ICONS: Record<string, typeof MessageCircle> = {
+  instagram_comment_link: MessageCircle,
+  instagram_comment_conversa: MessagesSquare,
 }
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
@@ -38,16 +55,40 @@ onMounted(() => {
   load().catch((e) => (errorMsg.value = (e as Error).message))
 })
 
+function openCreateDialog() {
+  errorMsg.value = null
+  selectedTemplateId.value = null
+  form.value = { name: '', trigger_type: 'lead_new_message' }
+  dialogOpen.value = true
+}
+
+function selectTemplate(t: FlowTemplate) {
+  selectedTemplateId.value = t.id
+  form.value.name = t.name
+  form.value.trigger_type = t.triggerType
+}
+
+function clearTemplate() {
+  selectedTemplateId.value = null
+  form.value = { name: '', trigger_type: 'lead_new_message' }
+}
+
 async function onCreate() {
   errorMsg.value = null
   submitting.value = true
   try {
+    const template = selectedTemplateId.value
+      ? FLOW_TEMPLATES.find((t) => t.id === selectedTemplateId.value)
+      : null
     const id = await create({
       name: form.value.name.trim(),
       trigger_type: form.value.trigger_type,
+      trigger_config: template?.triggerConfig,
+      graph: template?.graph,
     })
     dialogOpen.value = false
     form.value = { name: '', trigger_type: 'lead_new_message' }
+    selectedTemplateId.value = null
     await router.push(`/automacoes/fluxos/${id}`)
   } catch (e) {
     errorMsg.value = (e as Error).message
@@ -88,7 +129,7 @@ function fmtDate(iso: string | null) {
           Automações visuais: gatilhos, mensagens, condições e ações.
         </p>
       </div>
-      <Button @click="dialogOpen = true">
+      <Button @click="openCreateDialog">
         <Plus class="h-4 w-4" />
         Novo fluxo
       </Button>
@@ -112,7 +153,7 @@ function fmtDate(iso: string | null) {
               <TableHead>Nome</TableHead>
               <TableHead>Gatilho</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Versão</TableHead>
+              <TableHead>Versao</TableHead>
               <TableHead>Atualizado</TableHead>
               <TableHead class="w-24 text-right">Ações</TableHead>
             </TableRow>
@@ -150,19 +191,60 @@ function fmtDate(iso: string | null) {
     </Card>
 
     <Dialog v-model:open="dialogOpen">
-      <DialogContent class="max-w-md">
+      <DialogContent class="max-w-xl">
         <DialogHeader>
           <DialogTitle>Novo fluxo</DialogTitle>
-          <DialogDescription>Escolha um nome e o gatilho de ativação.</DialogDescription>
+          <DialogDescription>
+            Escolha um template pronto ou crie do zero.
+          </DialogDescription>
         </DialogHeader>
-        <div class="space-y-4 py-2">
+
+        <!-- Templates -->
+        <div class="space-y-2">
+          <Label class="text-xs text-muted-foreground">Templates</Label>
+          <div class="grid gap-2">
+            <button
+              v-for="t in FLOW_TEMPLATES"
+              :key="t.id"
+              class="flex items-start gap-3 rounded-lg border p-3 text-left transition-colors"
+              :class="selectedTemplateId === t.id
+                ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                : 'border-border hover:border-primary/50 hover:bg-muted/30'"
+              @click="selectTemplate(t)"
+            >
+              <component
+                :is="TEMPLATE_ICONS[t.id] ?? Sparkles"
+                class="mt-0.5 h-5 w-5 shrink-0"
+                :class="selectedTemplateId === t.id ? 'text-primary' : 'text-muted-foreground'"
+              />
+              <div class="min-w-0 flex-1">
+                <div class="text-sm font-medium">{{ t.name }}</div>
+                <div class="text-xs text-muted-foreground">{{ t.description }}</div>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <div class="h-px flex-1 bg-border" />
+          <span class="text-xs text-muted-foreground">ou crie do zero</span>
+          <div class="h-px flex-1 bg-border" />
+        </div>
+
+        <!-- Custom -->
+        <div class="space-y-3">
           <div class="space-y-2">
             <Label for="flow-name">Nome</Label>
-            <Input id="flow-name" v-model="form.name" placeholder="Ex.: Boas-vindas" />
+            <Input
+              id="flow-name"
+              v-model="form.name"
+              placeholder="Ex.: Boas-vindas"
+              @focus="clearTemplate"
+            />
           </div>
           <div class="space-y-2">
             <Label>Gatilho</Label>
-            <Select v-model="form.trigger_type">
+            <Select v-model="form.trigger_type" @update:model-value="clearTemplate">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem
@@ -176,11 +258,12 @@ function fmtDate(iso: string | null) {
             </Select>
           </div>
         </div>
+
         <DialogFooter>
           <Button variant="outline" @click="dialogOpen = false">Cancelar</Button>
           <Button :disabled="submitting || !form.name.trim()" @click="onCreate">
             <Loader2 v-if="submitting" class="h-4 w-4 animate-spin" />
-            Criar
+            Criar fluxo
           </Button>
         </DialogFooter>
       </DialogContent>

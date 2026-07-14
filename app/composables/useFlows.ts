@@ -4,6 +4,7 @@ export type FlowTriggerType =
   | 'lead_in_service_message'
   | 'lead_column_changed'
   | 'manual_chat'
+  | 'instagram_comment'
 
 export type FlowStatus = 'draft' | 'published' | 'archived'
 
@@ -84,6 +85,7 @@ export function useFlows() {
     name: string
     trigger_type: FlowTriggerType
     trigger_config?: Record<string, unknown>
+    graph?: FlowGraph
     on_conflict?: 'skip' | 'queue' | 'abort_previous'
     default_message_delay_ms?: number
   }): Promise<string> {

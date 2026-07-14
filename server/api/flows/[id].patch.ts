@@ -7,6 +7,7 @@ const VALID_TRIGGERS = [
   'lead_in_service_message',
   'lead_column_changed',
   'manual_chat',
+  'instagram_comment',
 ]
 const VALID_CONFLICT = ['skip', 'queue', 'abort_previous']
 

@@ -32,6 +32,7 @@ const TRIGGER_LABELS: Record<FlowTriggerType, string> = {
   lead_in_service_message: 'Lead em atendimento enviou mensagem',
   lead_column_changed: 'Lead mudou de coluna',
   manual_chat: 'Disparo manual',
+  instagram_comment: 'Comentário no Instagram',
 }
 
 const flowName = ref('')
@@ -358,11 +359,12 @@ const nodeTypes = { flowNode: FlowNodeCard } as unknown as NodeTypesObject
         </SelectContent>
       </Select>
       <TriggerConfigEditor
-        v-if="triggerType === 'lead_column_changed'"
+        v-if="triggerType === 'lead_column_changed' || triggerType === 'instagram_comment'"
         class="min-w-[280px] max-w-md"
         :trigger-type="triggerType"
         :config="triggerConfig"
         :columns="builderOptions.columns.value"
+        :connections="builderOptions.connections.value"
         @update="triggerConfig = $event"
       />
       <div v-if="flow" class="text-xs text-muted-foreground">

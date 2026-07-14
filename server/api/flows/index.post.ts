@@ -7,6 +7,7 @@ const VALID_TRIGGERS = [
   'lead_in_service_message',
   'lead_column_changed',
   'manual_chat',
+  'instagram_comment',
 ]
 
 const VALID_CONFLICT = ['skip', 'queue', 'abort_previous']
@@ -15,6 +16,7 @@ type Body = {
   name?: string
   trigger_type?: string
   trigger_config?: Record<string, unknown>
+  graph?: { nodes: unknown[]; edges: unknown[]; entry?: string }
   on_conflict?: string
   default_message_delay_ms?: number
 }
@@ -37,6 +39,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const admin = useSupabaseAdmin()
+  const initialGraph = body.graph && Array.isArray(body.graph.nodes) && body.graph.nodes.length > 0
+    ? body.graph
+    : { nodes: [], edges: [] }
   const { data, error } = await admin
     .from('flows')
     .insert({
@@ -44,7 +49,7 @@ export default defineEventHandler(async (event) => {
       name,
       trigger_type: triggerType,
       trigger_config: body.trigger_config ?? {},
-      graph: { nodes: [], edges: [] },
+      graph: initialGraph as Record<string, unknown>,
       status: 'draft',
       on_conflict: onConflict,
       default_message_delay_ms: body.default_message_delay_ms ?? 3000,

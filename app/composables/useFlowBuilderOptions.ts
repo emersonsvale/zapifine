@@ -5,6 +5,7 @@ export type FlowColumnOption = { id: number; nome: string; role: string | null }
 type ColumnRow = { id: number; nome_coluna: string | null; role?: string | null }
 export type FlowUserOption = { id: string; nome: string | null; email: string | null }
 export type FlowFlowOption = { id: string; name: string; status: string }
+export type FlowConnectionOption = { id: string; display_name: string | null; provider: string }
 
 export function useFlowBuilderOptions() {
   const supabase = useSupabaseClient<Database>()
@@ -14,6 +15,7 @@ export function useFlowBuilderOptions() {
   const users = ref<FlowUserOption[]>([])
   const tags = ref<string[]>([])
   const flows = ref<FlowFlowOption[]>([])
+  const connections = ref<FlowConnectionOption[]>([])
   const pending = ref(false)
 
   async function load(excludeFlowId?: string | null) {
@@ -30,7 +32,7 @@ export function useFlowBuilderOptions() {
         ((userCtx?.companies as { funil_incial_id?: number | null } | null) ?? null)
           ?.funil_incial_id ?? null
 
-      const [colsRes, usersRes, tagsRes, flowsRes] = await Promise.all([
+      const [colsRes, usersRes, tagsRes, flowsRes, connsRes] = await Promise.all([
         funilId
           ? supabase
               .from('ff_colunas_funil')
@@ -54,6 +56,7 @@ export function useFlowBuilderOptions() {
               .limit(500)
           : Promise.resolve({ data: [], error: null }),
         $fetch<{ flows: FlowSummary[] }>('/api/flows').catch(() => ({ flows: [] })),
+        $fetch<{ connections: Array<{ id: string; display_name: string | null; provider: string }> }>('/api/connections').catch(() => ({ connections: [] })),
       ])
 
       columns.value = ((colsRes.data ?? []) as unknown as ColumnRow[]).map((c) => ({
@@ -76,10 +79,14 @@ export function useFlowBuilderOptions() {
       flows.value = flowsRes.flows
         .filter((f) => f.id !== excludeFlowId && f.status !== 'archived')
         .map((f) => ({ id: f.id, name: f.name, status: f.status }))
+
+      connections.value = (connsRes.connections ?? [])
+        .filter((c) => c.provider === 'instagram' || c.provider === 'facebook')
+        .map((c) => ({ id: c.id, display_name: c.display_name, provider: c.provider }))
     } finally {
       pending.value = false
     }
   }
 
-  return { columns, users, tags, flows, pending, load }
+  return { columns, users, tags, flows, connections, pending, load }
 }

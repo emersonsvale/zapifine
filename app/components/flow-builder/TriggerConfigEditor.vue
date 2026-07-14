@@ -2,12 +2,13 @@
 import { computed } from 'vue'
 import { X } from 'lucide-vue-next'
 import type { FlowTriggerType } from '~/composables/useFlows'
-import type { FlowColumnOption } from '~/composables/useFlowBuilderOptions'
+import type { FlowColumnOption, FlowConnectionOption } from '~/composables/useFlowBuilderOptions'
 
 const props = defineProps<{
   triggerType: FlowTriggerType
   config: Record<string, unknown>
   columns: FlowColumnOption[]
+  connections?: FlowConnectionOption[]
 }>()
 
 const emit = defineEmits<{
@@ -21,6 +22,18 @@ const selectedColunaIds = computed<number[]>(() => {
   }
   const single = props.config.coluna_id
   return typeof single === 'number' ? [single] : []
+})
+
+const igKeyword = computed<string>(() => {
+  return typeof props.config.keyword === 'string' ? props.config.keyword : ''
+})
+
+const igConnectionId = computed<string>(() => {
+  return typeof props.config.connection_id === 'string' ? props.config.connection_id : ''
+})
+
+const igConnections = computed<FlowConnectionOption[]>(() => {
+  return (props.connections ?? []).filter((c) => c.provider === 'instagram')
 })
 
 function toggleColuna(id: number) {
@@ -74,5 +87,43 @@ function colunaLabel(id: number): string {
         </SelectItem>
       </SelectContent>
     </Select>
+  </div>
+
+  <div v-if="triggerType === 'instagram_comment'" class="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+    <div class="space-y-1.5">
+      <label class="text-xs font-medium">Conexão Instagram</label>
+      <Select
+        :model-value="igConnectionId || ''"
+        @update:model-value="(v) => emit('update', { ...props.config, connection_id: v || null })"
+      >
+        <SelectTrigger class="h-8 text-xs">
+          <SelectValue placeholder="Qualquer conexão" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="">Qualquer conexão</SelectItem>
+          <SelectItem
+            v-for="conn in igConnections"
+            :key="conn.id"
+            :value="conn.id"
+          >
+            {{ conn.display_name ?? conn.id }}
+          </SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+
+    <div class="space-y-1.5">
+      <label class="text-xs font-medium">Palavra-chave (opcional)</label>
+      <input
+        type="text"
+        :value="igKeyword"
+        placeholder="Ex: quero saber mais"
+        class="w-full rounded-md border border-input bg-background px-2 py-1 text-xs"
+        @input="(e) => emit('update', { ...props.config, keyword: (e.target as HTMLInputElement).value })"
+      />
+      <p class="text-xs text-muted-foreground">
+        Dispara apenas se o comentário contiver esta palavra/frase
+      </p>
+    </div>
   </div>
 </template>
