@@ -968,9 +968,16 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                   +{{ leadTags.length - 4 }}
                 </span>
               </template>
-              <span v-else-if="!isGroupConv && !hasLead" class="truncate text-xs text-muted-foreground">
+              <button
+                v-else-if="!isGroupConv && !hasLead"
+                type="button"
+                class="inline-flex items-center gap-1 truncate text-xs text-muted-foreground hover:text-primary hover:underline transition-colors"
+                title="Vincular ou cadastrar lead"
+                @click="openLinkLead"
+              >
+                <Link2 class="h-3 w-3 shrink-0" />
                 Sem lead vinculado
-              </span>
+              </button>
               <button
                 v-if="hasLead"
                 type="button"
