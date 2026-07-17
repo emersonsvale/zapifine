@@ -32,6 +32,8 @@ type Conversation = {
   setor_nome: string | null
   setor_cor: string | null
   provider: string | null
+  funil_nome: string | null
+  coluna_nome: string | null
 }
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
@@ -121,6 +123,8 @@ export function useChats() {
         setor_nome: string | null
         setor_cor: string | null
         provider: string | null
+        funil_nome: string | null
+        coluna_nome: string | null
       }>
 
       const ids = rows.map((r) => r.id)
@@ -173,6 +177,8 @@ export function useChats() {
         setor_nome: r.setor_nome ?? null,
         setor_cor: r.setor_cor ?? null,
         provider: r.provider ?? null,
+        funil_nome: r.funil_nome ?? null,
+        coluna_nome: r.coluna_nome ?? null,
       }))
     },
     { watch: [() => authUser.value?.id], default: () => [] },

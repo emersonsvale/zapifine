@@ -38,6 +38,8 @@ type Conv = {
   setor_nome?: string | null
   setor_cor?: string | null
   provider?: string | null
+  funil_nome?: string | null
+  coluna_nome?: string | null
 }
 
 type Setor = { id: string; nome: string; cor: string | null }
@@ -209,6 +211,8 @@ const filtered = computed(() => {
       c.remoteJid,
       c.setor_nome,
       c.assigned_nome,
+      c.funil_nome,
+      c.coluna_nome,
       ...tagsFor(c),
     ]
       .filter(Boolean)
@@ -677,6 +681,13 @@ function previewText(c: Conv) {
                     :title="`Setor: ${c.setor_nome}`"
                   >
                     {{ c.setor_nome }}
+                  </span>
+                  <span
+                    v-if="c.funil_nome"
+                    class="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-600"
+                    :title="`Funil: ${c.funil_nome}${c.coluna_nome ? ' → ' + c.coluna_nome : ''}`"
+                  >
+                    {{ c.funil_nome }}{{ c.coluna_nome ? ' → ' + c.coluna_nome : '' }}
                   </span>
                 </p>
                 <span
