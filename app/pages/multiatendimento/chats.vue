@@ -88,6 +88,14 @@ const setorBadge = computed(() => {
     cor: c.setor_cor ?? '#94a3b8',
   }
 })
+const funilBadge = computed(() => {
+  const c = selectedConversation.value
+  if (!c?.funil_nome) return null
+  return {
+    funil: c.funil_nome,
+    coluna: c.coluna_nome ?? null,
+  }
+})
 const canClaim = computed(() => {
   const c = selectedConversation.value
   if (!c) return false
@@ -942,6 +950,13 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 :title="`Setor: ${setorBadge.nome}`"
               >
                 {{ setorBadge.nome }}
+              </span>
+              <span
+                v-if="funilBadge"
+                class="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-600"
+                :title="`Funil: ${funilBadge.funil}${funilBadge.coluna ? ' → ' + funilBadge.coluna : ''}`"
+              >
+                {{ funilBadge.funil }}{{ funilBadge.coluna ? ' → ' + funilBadge.coluna : '' }}
               </span>
             </p>
             <p
