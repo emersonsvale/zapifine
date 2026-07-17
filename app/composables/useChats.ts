@@ -1165,7 +1165,6 @@ export function useChats() {
             event: 'INSERT',
             schema: 'public',
             table: 'whats_mensagens_conversa',
-            filter: `whats_conversa_id=eq.${id}`,
           },
           (payload) => {
             console.log('[useChats] thread INSERT msg:', (payload.new as any).id, 'status:', (payload.new as any).status)
@@ -1198,7 +1197,6 @@ export function useChats() {
             event: 'UPDATE',
             schema: 'public',
             table: 'whats_mensagens_conversa',
-            filter: `whats_conversa_id=eq.${id}`,
           },
           (payload) => {
             if (selectedId.value !== id) return
@@ -1259,7 +1257,6 @@ export function useChats() {
           event: '*',
           schema: 'public',
           table: 'whats_presence',
-          filter: `conversa_id=eq.${id}`,
         },
         (payload) => {
           const row = (payload.new ?? payload.old) as {
@@ -1268,7 +1265,7 @@ export function useChats() {
             media: string | null
             updated_at: string | null
           }
-          if (!row) return
+          if (!row || row.conversa_id !== id) return
           applyPresenceRow(row)
         },
       )
@@ -1301,30 +1298,6 @@ export function useChats() {
       _globalChannelCid = cid
       globalChannel = supabase
         .channel(`chats-company-${cid}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'whats_conversa',
-            filter: `companies_id=eq.${cid}`,
-          },
-          () => {
-            refreshConversations()
-          },
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'whats_conversa',
-            filter: `companies_id=eq.${cid}`,
-          },
-          (payload) => {
-            patchConversationFromRow(payload.new as Record<string, unknown>)
-          },
-        )
         .on(
           'postgres_changes',
           {
@@ -1388,11 +1361,14 @@ export function useChats() {
     const onVisible = async () => {
       if (document.visibilityState !== 'visible') return
       if (onVisibleRunning) return
+      // Só recria canais se realmente perdemos conexão (tab dormiu/background).
+      // Focus normal não deve resetar canais saudáveis.
+      const wasHidden = _onVisibleWasHidden
+      _onVisibleWasHidden = false
+      if (!wasHidden) return
       onVisibleRunning = true
       try {
         await syncRealtimeAuth()
-        // Recria canais — heartbeats podem ter caído em background (throttle Chrome).
-        // Limpa dedup IDs para forçar recriação completa.
         _globalChannelCid = null
         _threadChannelId = null
         _presenceChannelId = null
@@ -1409,11 +1385,16 @@ export function useChats() {
         onVisibleRunning = false
       }
     }
-    document.addEventListener('visibilitychange', onVisible)
+    let _onVisibleWasHidden = false
+    const _onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') _onVisibleWasHidden = true
+      else onVisible()
+    }
+    document.addEventListener('visibilitychange', _onVisibilityChange)
     window.addEventListener('focus', onVisible)
 
     onBeforeUnmount(async () => {
-      document.removeEventListener('visibilitychange', onVisible)
+      document.removeEventListener('visibilitychange', _onVisibilityChange)
       window.removeEventListener('focus', onVisible)
       await teardownThreadChannel()
       await teardownGlobalChannel()
