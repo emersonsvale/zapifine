@@ -682,13 +682,6 @@ function previewText(c: Conv) {
                   >
                     {{ c.setor_nome }}
                   </span>
-                  <span
-                    v-if="c.funil_nome"
-                    class="inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[10px] font-medium bg-violet-500/10 text-violet-600"
-                    :title="`Funil: ${c.funil_nome}${c.coluna_nome ? ' → ' + c.coluna_nome : ''}`"
-                  >
-                    {{ c.funil_nome }}{{ c.coluna_nome ? ' → ' + c.coluna_nome : '' }}
-                  </span>
                 </p>
                 <span
                   class="shrink-0 text-[11px]"
