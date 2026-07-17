@@ -1041,6 +1041,29 @@ export function useChats() {
     if (isRecebida && !isOpen) {
       unreadGlobal.value = (unreadGlobal.value ?? 0) + 1
     }
+
+    // Garante que mensagem aparece na view atual mesmo se thread channel
+    // perder o evento (ex: durante janela de setup/teardown do canal).
+    if (isOpen && row.id) {
+      const msgs = messages.value ?? []
+      if (!msgs.find((m) => m.id === row.id)) {
+        const optimisticIdx = msgs.findIndex(
+          (m) =>
+            typeof m.id === 'number' &&
+            m.id < 0 &&
+            m.mensagem === row.mensagem &&
+            row.status === 'Enviada',
+        )
+        if (optimisticIdx !== -1) {
+          const next = msgs.slice()
+          next[optimisticIdx] = row
+          messages.value = next
+        } else {
+          messages.value = [...msgs, row]
+        }
+        if (isRecebida) markConversationSeen(convId)
+      }
+    }
   }
 
   function patchConversationFromRow(row: Record<string, unknown>) {
@@ -1310,6 +1333,10 @@ export function useChats() {
       try {
         await syncRealtimeAuth()
         // Recria canais — heartbeats podem ter caído em background (throttle Chrome).
+        // Limpa dedup IDs para forçar recriação completa.
+        _globalChannelCid = null
+        _threadChannelId = null
+        _presenceChannelId = null
         const cid = companyId.value
         const sel = selectedId.value
         if (cid) await setupGlobalChannel(cid)
