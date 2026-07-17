@@ -1141,69 +1141,109 @@ export function useChats() {
     }
   }
 
+  let _threadLock: Promise<void> | null = null
+
   async function setupThreadChannel(id: number) {
+    // Evita corrida: duas chamadas concorrentes pelo mesmo id.
     if (_threadChannelId === id) return
-    await teardownThreadChannel()
-    await syncRealtimeAuth()
-    _threadChannelId = id
-    threadChannel = supabase
-      .channel(`conv-${id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'whats_mensagens_conversa',
-          filter: `whats_conversa_id=eq.${id}`,
-        },
-        (payload) => {
-          if (selectedId.value !== id) return
-          const row = payload.new as Message
-          const list = messages.value ?? []
-          if (list.find((m) => m.id === row.id)) return
-          const optimisticIdx = list.findIndex(
-            (m) =>
-              typeof m.id === 'number' &&
-              m.id < 0 &&
-              m.mensagem === row.mensagem &&
-              row.status === 'Enviada',
-          )
-          if (optimisticIdx !== -1) {
+    if (_threadLock) {
+      await _threadLock
+      if (_threadChannelId === id) return
+    }
+    let release: () => void
+    _threadLock = new Promise<void>((r) => { release = r })
+    try {
+      await teardownThreadChannel()
+      await syncRealtimeAuth()
+      threadChannel = supabase
+        .channel(`conv-${id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'whats_mensagens_conversa',
+            filter: `whats_conversa_id=eq.${id}`,
+          },
+          (payload) => {
+            if (selectedId.value !== id) return
+            const row = payload.new as Message
+            const list = messages.value ?? []
+            if (list.find((m) => m.id === row.id)) return
+            const optimisticIdx = list.findIndex(
+              (m) =>
+                typeof m.id === 'number' &&
+                m.id < 0 &&
+                m.mensagem === row.mensagem &&
+                row.status === 'Enviada',
+            )
+            if (optimisticIdx !== -1) {
+              const next = list.slice()
+              next[optimisticIdx] = row
+              messages.value = next
+            } else {
+              messages.value = [...list, row]
+            }
+            if (row.status === 'Recebida' && selectedId.value === id) {
+              markConversationSeen(id)
+            }
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'whats_mensagens_conversa',
+            filter: `whats_conversa_id=eq.${id}`,
+          },
+          (payload) => {
+            if (selectedId.value !== id) return
+            const row = payload.new as Message
+            const list = messages.value ?? []
+            const idx = list.findIndex((m) => m.id === row.id)
+            if (idx === -1) return
             const next = list.slice()
-            next[optimisticIdx] = row
+            next[idx] = { ...next[idx], ...row } as Message
             messages.value = next
-          } else {
-            messages.value = [...list, row]
+          },
+        )
+        .subscribe(async (status) => {
+          console.log('[useChats] thread channel status:', status)
+          if (status === 'SUBSCRIBED') {
+            _threadChannelId = id
+            // Safety net: busca mensagens que podem ter chegado durante setup
+            try {
+              const latest = await fetchMessagesPage(id, null, 5)
+              if (selectedId.value === id && latest.length > 0) {
+                const current = messages.value ?? []
+                const existingIds = new Set(current.map((m) => m.id))
+                const missing = latest.filter((m) => !existingIds.has(m.id))
+                // Remove optimistic temp messages replaced by real inserts
+                for (const fresh of missing) {
+                  const optIdx = current.findIndex(
+                    (o) =>
+                      typeof o.id === 'number' &&
+                      o.id < 0 &&
+                      o.mensagem === fresh.mensagem &&
+                      fresh.status === 'Enviada',
+                  )
+                  if (optIdx !== -1) current[optIdx] = fresh
+                  else if (!existingIds.has(fresh.id)) current.push(fresh)
+                }
+                messages.value = current
+              }
+            } catch {}
           }
-          if (row.status === 'Recebida' && selectedId.value === id) {
-            markConversationSeen(id)
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('[useChats] thread channel error:', status)
+            _threadChannelId = null
           }
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'whats_mensagens_conversa',
-          filter: `whats_conversa_id=eq.${id}`,
-        },
-        (payload) => {
-          if (selectedId.value !== id) return
-          const row = payload.new as Message
-          const list = messages.value ?? []
-          const idx = list.findIndex((m) => m.id === row.id)
-          if (idx === -1) return
-          const next = list.slice()
-          next[idx] = { ...next[idx], ...row } as Message
-          messages.value = next
-        },
-      )
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[useChats] thread channel status:', status)
-        }
-      })
+        })
+    } finally {
+      _threadLock = null
+      release!()
+    }
   }
 
   async function setupPresenceChannel(id: number) {
@@ -1243,53 +1283,70 @@ export function useChats() {
     } catch {}
   }
 
+  let _globalLock: Promise<void> | null = null
+
   async function setupGlobalChannel(cid: string) {
     if (_globalChannelCid === cid) return
-    await teardownGlobalChannel()
-    await syncRealtimeAuth()
-    _globalChannelCid = cid
-    globalChannel = supabase
-      .channel(`chats-company-${cid}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'whats_conversa',
-          filter: `companies_id=eq.${cid}`,
-        },
-        () => {
-          refreshConversations()
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'whats_conversa',
-          filter: `companies_id=eq.${cid}`,
-        },
-        (payload) => {
-          patchConversationFromRow(payload.new as Record<string, unknown>)
-        },
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'whats_mensagens_conversa',
-        },
-        (payload) => {
-          patchConversationFromMessage(payload.new as Message)
-        },
-      )
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn('[useChats] company channel status:', status)
-        }
-      })
+    if (_globalLock) {
+      await _globalLock
+      if (_globalChannelCid === cid) return
+    }
+    let release: () => void
+    _globalLock = new Promise<void>((r) => { release = r })
+    try {
+      await teardownGlobalChannel()
+      await syncRealtimeAuth()
+      globalChannel = supabase
+        .channel(`chats-company-${cid}`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'whats_conversa',
+            filter: `companies_id=eq.${cid}`,
+          },
+          () => {
+            refreshConversations()
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'whats_conversa',
+            filter: `companies_id=eq.${cid}`,
+          },
+          (payload) => {
+            patchConversationFromRow(payload.new as Record<string, unknown>)
+          },
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'whats_mensagens_conversa',
+          },
+          (payload) => {
+            patchConversationFromMessage(payload.new as Message)
+          },
+        )
+        .subscribe((status) => {
+          console.log('[useChats] global channel status:', status)
+          if (status === 'SUBSCRIBED') {
+            _globalChannelCid = cid
+          }
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn('[useChats] global channel error:', status)
+            _globalChannelCid = null
+          }
+        })
+    } finally {
+      _globalLock = null
+      release!()
+    }
   }
 
   if (import.meta.client && isPrimary) {
