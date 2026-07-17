@@ -8,8 +8,7 @@ export default defineEventHandler(async (event) => {
   if (!id) throw createError({ statusCode: 400, statusMessage: 'id obrigatório' })
   await assertConnectionOwnership(id, user.companie_id)
 
-  const config = useRuntimeConfig(event)
-  const igAppId = config.public.instagramAppId as string
+  const igAppId = process.env.INSTAGRAM_APP_ID
   if (!igAppId) {
     throw createError({ statusCode: 501, statusMessage: 'INSTAGRAM_APP_ID ausente' })
   }
