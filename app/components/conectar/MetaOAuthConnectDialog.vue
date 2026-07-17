@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Loader2, Facebook, Instagram, ExternalLink } from 'lucide-vue-next'
+import { Loader2, Facebook, Instagram, ExternalLink, CheckCircle2 } from 'lucide-vue-next'
 import type { ChannelConnection } from '~/composables/useChannelConnections'
 
 type MetaPage = {
@@ -44,6 +44,11 @@ watch(
       errorMsg.value = ''
       return
     }
+    // Instagram Login: o backend já conectou a conta e assinou o webhook no exchange.
+    // Não há Página pra escolher — nada a carregar aqui.
+    if (isInstagram.value) return
+
+    // Facebook Messenger: carrega as Páginas pra o usuário escolher.
     loading.value = true
     errorMsg.value = ''
     try {
@@ -62,8 +67,15 @@ function startOAuth() {
   window.location.href = `/api/connections/${props.connection.id}/meta-oauth/start`
 }
 
+// Instagram: só confirmar (já está conectado). Facebook: configurar a Página escolhida.
 async function submit() {
-  if (!props.connection || !selectedPageId.value) return
+  if (!props.connection) return
+  if (isInstagram.value) {
+    emit('configured')
+    emit('update:open', false)
+    return
+  }
+  if (!selectedPageId.value) return
   const page = pages.value.find((p) => p.id === selectedPageId.value)
   if (!page) return
   loading.value = true
@@ -74,7 +86,7 @@ async function submit() {
       page_id: page.id,
       page_access_token: page.access_token,
       page_name: page.name,
-      instagram_business_id: isInstagram.value ? page.instagram?.id ?? null : null,
+      instagram_business_id: null,
     })
     emit('configured')
     emit('update:open', false)
@@ -98,9 +110,11 @@ async function submit() {
         <DialogDescription>
           {{
             !oauthCompleted
-              ? 'Faça login com Facebook e autorize o app.'
+              ? isInstagram
+                ? 'Faça login com sua conta Instagram profissional e autorize o app.'
+                : 'Faça login com Facebook e autorize o app.'
               : isInstagram
-                ? 'Escolha a conta Instagram Business vinculada a uma Page.'
+                ? 'Conta conectada com sucesso.'
                 : 'Escolha a Page Facebook que receberá mensagens.'
           }}
         </DialogDescription>
@@ -109,13 +123,23 @@ async function submit() {
       <div class="space-y-4 py-2">
         <template v-if="!oauthCompleted">
           <Button class="w-full" @click="startOAuth">
-            <Facebook class="h-4 w-4" />
-            Continuar com Facebook
+            <component :is="isInstagram ? Instagram : Facebook" class="h-4 w-4" />
+            Continuar com {{ isInstagram ? 'Instagram' : 'Facebook' }}
             <ExternalLink class="h-3.5 w-3.5 opacity-70" />
           </Button>
           <p class="text-xs text-muted-foreground">
-            Você será redirecionado pro Facebook. Após autorizar, volta automaticamente.
+            Você será redirecionado pro {{ isInstagram ? 'Instagram' : 'Facebook' }}. Após autorizar, volta automaticamente.
           </p>
+        </template>
+
+        <template v-else-if="isInstagram">
+          <div class="flex flex-col items-center gap-2 py-6 text-center">
+            <CheckCircle2 class="h-8 w-8 text-primary" />
+            <p class="text-sm font-medium">Instagram conectado!</p>
+            <p class="text-xs text-muted-foreground">
+              Já estamos recebendo mensagens do Direct e comentários desta conta.
+            </p>
+          </div>
         </template>
 
         <template v-else>
@@ -124,12 +148,7 @@ async function submit() {
           </div>
 
           <div v-else-if="eligible.length === 0" class="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
-            <template v-if="isInstagram">
-              Nenhuma conta Instagram Business vinculada às suas pages.
-            </template>
-            <template v-else>
-              Nenhuma page Facebook encontrada.
-            </template>
+            Nenhuma page Facebook encontrada.
           </div>
 
           <div v-else class="space-y-2 max-h-72 overflow-y-auto pr-1">
@@ -147,10 +166,7 @@ async function submit() {
               />
               <div class="min-w-0">
                 <p class="text-sm font-medium truncate">{{ p.name }}</p>
-                <p v-if="isInstagram && p.instagram?.username" class="text-xs text-muted-foreground">
-                  @{{ p.instagram.username }}
-                </p>
-                <p v-else-if="p.category" class="text-xs text-muted-foreground">{{ p.category }}</p>
+                <p v-if="p.category" class="text-xs text-muted-foreground">{{ p.category }}</p>
               </div>
             </label>
           </div>
@@ -167,15 +183,15 @@ async function submit() {
 
       <DialogFooter>
         <Button variant="ghost" :disabled="loading" @click="emit('update:open', false)">
-          Cancelar
+          {{ oauthCompleted && isInstagram ? 'Fechar' : 'Cancelar' }}
         </Button>
         <Button
           v-if="oauthCompleted"
-          :disabled="loading || !selectedPageId"
+          :disabled="loading || (!isInstagram && !selectedPageId)"
           @click="submit"
         >
           <Loader2 v-if="loading" class="h-4 w-4 animate-spin" />
-          Conectar
+          {{ isInstagram ? 'Concluir' : 'Conectar' }}
         </Button>
       </DialogFooter>
     </DialogContent>

@@ -1,8 +1,8 @@
 import { assertConnectionOwnership, requireCurrentUser } from '~~/server/utils/auth-company'
 import { callWhatsApi } from '~~/server/utils/whats-api'
 
-// Callback FIXO do OAuth Meta (IG/Facebook). O redirect_uri registrado no
-// Facebook Login é este caminho estático; o id da conexão chega no `state`.
+// Callback FIXO do OAuth (Instagram Business Login). O id da conexão chega no `state`.
+// O backend (/meta-oauth/exchange) faz o fluxo completo: token → /me → salva conta → assina webhook.
 export default defineEventHandler(async (event) => {
   const user = await requireCurrentUser(event)
 
@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
     process.env.NUXT_PUBLIC_SITE_URL ||
     reqHeaders.origin ||
     (reqHeaders.host ? `https://${reqHeaders.host}` : null)
-  // Precisa ser IDÊNTICO ao redirect_uri usado no start (Facebook exige match exato).
+  // Precisa ser IDÊNTICO ao redirect_uri usado no start (Instagram exige match exato).
   const redirectUri = `${origin}/api/meta-oauth/callback`
 
   try {
