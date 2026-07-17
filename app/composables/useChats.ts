@@ -78,7 +78,15 @@ function buildPrefixed(text: string, sig: AttendantSignature): string {
   return `*${nome} - ${cargo}*\n\n${text}`
 }
 
+// Singleton guard: only first caller sets up realtime subscriptions.
+// Child components (ChatMessage, AudioRecorder, LinkLeadDialog) also call
+// useChats() but skip channel creation — they only use returned methods.
+let _useChatsPrimary = false
+
 export function useChats() {
+  const isPrimary = !_useChatsPrimary
+  _useChatsPrimary = true
+
   const supabase = useSupabaseClient<Database>()
   const authUser = useSupabaseUser()
   const whatsApi = useWhatsApi()
@@ -1070,6 +1078,9 @@ export function useChats() {
   let threadChannel: ReturnType<typeof supabase.channel> | null = null
   let globalChannel: ReturnType<typeof supabase.channel> | null = null
   let presenceChannel: ReturnType<typeof supabase.channel> | null = null
+  let _threadChannelId: number | null = null
+  let _presenceChannelId: number | null = null
+  let _globalChannelCid: string | null = null
 
   async function syncRealtimeAuth() {
     try {
@@ -1083,6 +1094,7 @@ export function useChats() {
     if (threadChannel) {
       await supabase.removeChannel(threadChannel)
       threadChannel = null
+      _threadChannelId = null
     }
   }
 
@@ -1090,6 +1102,7 @@ export function useChats() {
     if (presenceChannel) {
       await supabase.removeChannel(presenceChannel)
       presenceChannel = null
+      _presenceChannelId = null
     }
     if (presenceExpireTimer) {
       clearTimeout(presenceExpireTimer)
@@ -1101,14 +1114,17 @@ export function useChats() {
     if (globalChannel) {
       await supabase.removeChannel(globalChannel)
       globalChannel = null
+      _globalChannelCid = null
     }
   }
 
   async function setupThreadChannel(id: number) {
+    if (_threadChannelId === id) return
     await teardownThreadChannel()
     await syncRealtimeAuth()
+    _threadChannelId = id
     threadChannel = supabase
-      .channel(`conv-${id}-${Math.random().toString(36).slice(2, 8)}`)
+      .channel(`conv-${id}`)
       .on(
         'postgres_changes',
         {
@@ -1168,9 +1184,11 @@ export function useChats() {
   }
 
   async function setupPresenceChannel(id: number) {
+    if (_presenceChannelId === id) return
     await teardownPresenceChannel()
+    _presenceChannelId = id
     presenceChannel = supabase
-      .channel(`presence-${id}-${Math.random().toString(36).slice(2, 8)}`)
+      .channel(`presence-${id}`)
       .on(
         'postgres_changes',
         {
@@ -1203,10 +1221,12 @@ export function useChats() {
   }
 
   async function setupGlobalChannel(cid: string) {
+    if (_globalChannelCid === cid) return
     await teardownGlobalChannel()
     await syncRealtimeAuth()
+    _globalChannelCid = cid
     globalChannel = supabase
-      .channel(`chats-company-${cid}-${Math.random().toString(36).slice(2, 8)}`)
+      .channel(`chats-company-${cid}`)
       .on(
         'postgres_changes',
         {
@@ -1249,7 +1269,7 @@ export function useChats() {
       })
   }
 
-  if (import.meta.client) {
+  if (import.meta.client && isPrimary) {
     syncRealtimeAuth()
     supabase.auth.onAuthStateChange(() => {
       syncRealtimeAuth()
