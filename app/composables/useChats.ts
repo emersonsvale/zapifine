@@ -1155,6 +1155,8 @@ export function useChats() {
     try {
       await teardownThreadChannel()
       await syncRealtimeAuth()
+      // Seta sincrono pra evitar re-entrada antes do SUBSCRIBED
+      _threadChannelId = id
       threadChannel = supabase
         .channel(`conv-${id}`)
         .on(
@@ -1166,6 +1168,7 @@ export function useChats() {
             filter: `whats_conversa_id=eq.${id}`,
           },
           (payload) => {
+            console.log('[useChats] thread INSERT msg:', (payload.new as any).id, 'status:', (payload.new as any).status)
             if (selectedId.value !== id) return
             const row = payload.new as Message
             const list = messages.value ?? []
@@ -1211,7 +1214,6 @@ export function useChats() {
         .subscribe(async (status) => {
           console.log('[useChats] thread channel status:', status)
           if (status === 'SUBSCRIBED') {
-            _threadChannelId = id
             // Safety net: busca mensagens que podem ter chegado durante setup
             try {
               const latest = await fetchMessagesPage(id, null, 5)
@@ -1219,7 +1221,6 @@ export function useChats() {
                 const current = messages.value ?? []
                 const existingIds = new Set(current.map((m) => m.id))
                 const missing = latest.filter((m) => !existingIds.has(m.id))
-                // Remove optimistic temp messages replaced by real inserts
                 for (const fresh of missing) {
                   const optIdx = current.findIndex(
                     (o) =>
@@ -1235,9 +1236,9 @@ export function useChats() {
               }
             } catch {}
           }
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.warn('[useChats] thread channel error:', status)
-            _threadChannelId = null
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (_threadChannelId === id) _threadChannelId = null
+            if (status !== 'CLOSED') console.warn('[useChats] thread channel error:', status)
           }
         })
     } finally {
@@ -1296,6 +1297,8 @@ export function useChats() {
     try {
       await teardownGlobalChannel()
       await syncRealtimeAuth()
+      // Seta sincrono pra evitar re-entrada antes do SUBSCRIBED
+      _globalChannelCid = cid
       globalChannel = supabase
         .channel(`chats-company-${cid}`)
         .on(
@@ -1330,17 +1333,16 @@ export function useChats() {
             table: 'whats_mensagens_conversa',
           },
           (payload) => {
-            patchConversationFromMessage(payload.new as Message)
+            const row = payload.new as Message
+            console.log('[useChats] global INSERT msg:', row.id, 'status:', row.status, 'conv:', (row as any).whats_conversa_id)
+            patchConversationFromMessage(row)
           },
         )
         .subscribe((status) => {
           console.log('[useChats] global channel status:', status)
-          if (status === 'SUBSCRIBED') {
-            _globalChannelCid = cid
-          }
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.warn('[useChats] global channel error:', status)
-            _globalChannelCid = null
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            if (_globalChannelCid === cid) _globalChannelCid = null
+            if (status !== 'CLOSED') console.warn('[useChats] global channel error:', status)
           }
         })
     } finally {
