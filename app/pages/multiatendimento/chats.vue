@@ -13,7 +13,6 @@ import {
   BotOff,
   Eraser,
   Trash2,
-  UserRound,
   Image as ImageIcon,
   Link as LinkIcon,
   MapPin,
@@ -1067,17 +1066,6 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             Assumir
           </Button>
           <Button
-            v-if="hasLead"
-            variant="ghost"
-            size="icon"
-            class="hidden shrink-0 xl:inline-flex"
-            :title="leadPanelOpen ? 'Ocultar dados do lead' : 'Mostrar dados do lead'"
-            @click="toggleLeadPanel"
-          >
-            <PanelRightClose v-if="leadPanelOpen" class="h-4 w-4" />
-            <PanelRightOpen v-else class="h-4 w-4" />
-          </Button>
-          <Button
             :variant="iaAtiva ? 'default' : 'outline'"
             size="sm"
             :disabled="togglingIa || !selectedConversation?.leads?.id"
@@ -1190,18 +1178,10 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 Transferir → setor
               </DropdownMenuItem>
               <DropdownMenuSeparator v-if="selectedConversation?.assigned_to || !isAssignedToMe" />
-              <template v-if="hasLead">
-                <DropdownMenuItem @select="openLeadDrawer">
-                  <UserRound class="h-4 w-4" />
-                  Dados do lead
-                </DropdownMenuItem>
-              </template>
-              <template v-else>
-                <DropdownMenuItem @select="openLinkLead">
-                  <Link2 class="h-4 w-4" />
-                  Vincular lead
-                </DropdownMenuItem>
-              </template>
+              <DropdownMenuItem v-if="!hasLead" @select="openLinkLead">
+                <Link2 class="h-4 w-4" />
+                Vincular lead
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem @select="onClearMessages">
                 <Eraser class="h-4 w-4" />
@@ -1216,6 +1196,17 @@ const groupedMessages = computed<GroupedItem[]>(() => {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button
+            v-if="hasLead"
+            variant="ghost"
+            size="icon"
+            class="hidden shrink-0 xl:inline-flex"
+            :title="leadPanelOpen ? 'Minimizar dados do lead' : 'Maximizar dados do lead'"
+            @click="toggleLeadPanel"
+          >
+            <PanelRightClose v-if="leadPanelOpen" class="h-4 w-4" />
+            <PanelRightOpen v-else class="h-4 w-4" />
+          </Button>
         </div>
 
         <!-- Messages scroll area -->
