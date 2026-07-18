@@ -4,7 +4,6 @@ import {
   Send,
   Paperclip,
   Mic,
-  Phone,
   MoreVertical,
   MessageCircle,
   Users,
@@ -24,14 +23,12 @@ import {
   X,
   ArrowRightLeft,
   ChevronDown,
-  Eye,
   CalendarPlus,
   Workflow,
   PanelRightOpen,
   PanelRightClose,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
-import { formatPhone } from '~/lib/utils'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 
@@ -284,14 +281,6 @@ const tagsByLeadId = computed<Record<number, string[]>>(() => {
   return out
 })
 
-const drawerOpen = ref(false)
-
-watch(drawerOpen, async (open, wasOpen) => {
-  if (!open && wasOpen) {
-    await Promise.all([refreshLeads(), refreshConversations()])
-  }
-})
-
 // `leads` (useLeads) é filtrado pelo funil ativo. Se o lead da conversa está em
 // outro funil, não estará no store — buscamos ele sob demanda para o painel não
 // ficar com dados de um lead anterior (stale).
@@ -328,13 +317,6 @@ const leadForDialog = computed<Lead | null>(() => {
   return fetchedLeadId.value === leadId ? fetchedLead.value : null
 })
 
-function openLeadDrawer() {
-  if (!leadForDialog.value) {
-    toast.info('Esta conversa não está vinculada a um lead.')
-    return
-  }
-  drawerOpen.value = true
-}
 
 // Painel de dados do lead docado à direita (telas ≥ xl). Estado lembrado.
 const leadPanelOpen = ref(true)
@@ -823,18 +805,6 @@ const headerName = computed(() => {
     `#${c.id}`
   )
 })
-const headerNumber = computed(() => {
-  const c = selectedConversation.value
-  if (!c) return ''
-  if (c.isgrupo) return 'Grupo'
-  return c.leads?.numero_whatsapp_lead ?? c.remoteJid ?? ''
-})
-const headerNumberFormatted = computed(() => {
-  const c = selectedConversation.value
-  if (!c || c.isgrupo) return ''
-  const raw = c.leads?.numero_whatsapp_lead ?? c.remoteJid ?? ''
-  return formatPhone(raw)
-})
 const headerInitial = computed(() => {
   const n = headerName.value
   return (n[0] ?? '?').toUpperCase()
@@ -1014,24 +984,8 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 <Link2 class="h-3 w-3 shrink-0" />
                 Sem lead vinculado
               </button>
-              <button
-                v-if="hasLead"
-                type="button"
-                class="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded hover:bg-accent text-muted-foreground"
-                title="Ver dados do lead"
-                @click="openLeadDrawer"
-              >
-                <Eye class="h-3.5 w-3.5" />
-              </button>
             </div>
           </div>
-          <span
-            v-if="headerNumberFormatted"
-            class="hidden shrink-0 rounded-md border bg-muted/40 px-2 py-1 font-mono text-xs text-muted-foreground md:inline-block"
-            :title="headerNumber"
-          >
-            {{ headerNumberFormatted }}
-          </span>
           <Button
             v-if="canClaim"
             variant="default"
@@ -1071,9 +1025,6 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             <CalendarPlus class="h-4 w-4" />
             <span class="hidden text-xs sm:inline">Agendar</span>
           </Button>
-          <Button variant="ghost" size="icon" title="Ligar (em breve)" disabled>
-            <Phone class="h-4 w-4" />
-          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" size="icon" title="Mais">
@@ -1082,14 +1033,6 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" class="w-56">
               <DropdownMenuItem
-                v-if="!selectedConversation?.assigned_to || !isAssignedToMe"
-                :disabled="assigning"
-                @select="onAssignMe"
-              >
-                <UserPlus class="h-4 w-4" />
-                Assumir conversa
-              </DropdownMenuItem>
-              <DropdownMenuItem
                 v-if="selectedConversation?.assigned_to"
                 :disabled="assigning"
                 @select="onAssignRelease"
@@ -1097,11 +1040,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 <UserIcon class="h-4 w-4" />
                 Liberar conversa
               </DropdownMenuItem>
-              <DropdownMenuItem @select="openTransfer('setor')">
-                <ArrowRightLeft class="h-4 w-4" />
-                Transferir → setor
-              </DropdownMenuItem>
-              <DropdownMenuSeparator v-if="selectedConversation?.assigned_to || !isAssignedToMe" />
+              <DropdownMenuSeparator v-if="selectedConversation?.assigned_to" />
               <DropdownMenuItem v-if="!hasLead" @select="openLinkLead">
                 <Link2 class="h-4 w-4" />
                 Vincular lead
@@ -1420,16 +1359,8 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       />
       <!-- Sem lead vinculado: adicionar lead ou transferir -->
       <div v-else class="flex h-full min-h-0 flex-col bg-background">
-        <div class="flex shrink-0 items-center justify-between border-b px-4 py-3">
+        <div class="flex shrink-0 items-center border-b px-4 py-3">
           <p class="text-sm font-semibold">Lead</p>
-          <button
-            type="button"
-            class="inline-flex h-7 w-7 items-center justify-center rounded hover:bg-accent text-muted-foreground"
-            title="Recolher painel"
-            @click="leadPanelOpen = false"
-          >
-            <PanelRightClose class="h-4 w-4" />
-          </button>
         </div>
         <div class="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
           <div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
@@ -1454,12 +1385,6 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         </div>
       </div>
     </div>
-
-    <LeadsLeadDrawer
-      v-model:open="drawerOpen"
-      :lead="leadForDialog"
-      :columns="columns ?? []"
-    />
 
     <ChatsSendMediaDialog
       v-model:open="mediaOpen"

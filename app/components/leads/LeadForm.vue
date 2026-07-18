@@ -18,12 +18,12 @@ import {
   DollarSign,
   IdCard,
   Save,
-  PanelRightClose,
   ArrowRightLeft,
   ChevronDown,
   CheckCircle2,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
+import { formatPhone } from '~/lib/utils'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 type Column = Database['public']['Tables']['ff_colunas_funil']['Row']
@@ -409,22 +409,14 @@ const initials = computed(() => {
     .join('') || '?'
 })
 
+const phoneDisplay = computed(() => {
+  const raw = props.lead?.numero_whatsapp_lead || props.lead?.remoteJid_lead || ''
+  return raw ? formatPhone(raw) : '—'
+})
+
 const colunaOptions = computed(() =>
   (props.columns ?? []).slice().sort((a, b) => a.id - b.id),
 )
-
-async function onCollapse() {
-  if (isAnyDirty.value) {
-    const ok = await confirm({
-      title: 'Alterações não salvas',
-      description: 'Há campos alterados e não salvos. Recolher o painel vai descartá-los.',
-      confirmLabel: 'Descartar e recolher',
-      variant: 'danger',
-    })
-    if (!ok) return
-  }
-  emit('close')
-}
 </script>
 
 <template>
@@ -458,8 +450,8 @@ async function onCollapse() {
           <p class="truncate text-lg font-semibold">
             {{ form.nome_lead || 'Lead sem nome' }}
           </p>
-          <p class="text-xs text-muted-foreground truncate mt-0.5">
-            {{ lead?.numero_whatsapp_lead || lead?.remoteJid_lead || '—' }}
+          <p class="text-xs text-muted-foreground truncate mt-0.5 font-mono">
+            {{ phoneDisplay }}
           </p>
           <div class="flex items-center gap-2 mt-2">
             <button
@@ -484,15 +476,6 @@ async function onCollapse() {
             </button>
           </div>
         </div>
-        <button
-          v-if="docked"
-          type="button"
-          class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded hover:bg-accent text-muted-foreground"
-          title="Recolher painel"
-          @click="onCollapse"
-        >
-          <PanelRightClose class="h-4 w-4" />
-        </button>
       </div>
     </div>
 
