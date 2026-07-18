@@ -54,6 +54,18 @@ const { toast, confirm } = useAlerts()
 const movingFunil = ref(false)
 const movingCol = ref(false)
 
+// Nome da coluna/funil atuais do lead (mostrados nos botões do header).
+const currentColumnName = computed(() => {
+  const id = props.lead?.coluna_id
+  if (id == null) return null
+  return (props.columns ?? []).find((c) => c.id === id)?.nome_coluna ?? null
+})
+const currentFunilName = computed(() => {
+  const id = props.lead?.funil_id
+  if (id == null) return null
+  return (funis.value ?? []).find((f) => f.id === id)?.nome_funil ?? null
+})
+
 // Opções para os dropdowns do header (excluem a coluna/funil atuais do lead).
 const moveColumnOptions = computed(() =>
   (props.columns ?? []).filter((c) => c.id !== props.lead?.coluna_id),
@@ -482,7 +494,7 @@ const colunaOptions = computed(() =>
     <!-- Ações rápidas: transferir conversa, mover coluna, mudar funil -->
     <div
       v-if="lead"
-      class="flex items-center gap-2 border-b py-2"
+      class="flex flex-wrap items-center gap-2 border-b py-2"
       :class="docked ? 'px-4' : 'px-6'"
     >
       <Button
@@ -503,12 +515,12 @@ const colunaOptions = computed(() =>
             size="sm"
             class="h-8 gap-1"
             :disabled="movingCol || moveColumnOptions.length === 0"
-            title="Mover para outra coluna"
+            :title="currentColumnName ? `Coluna: ${currentColumnName}` : 'Mover para outra coluna'"
           >
             <Loader2 v-if="movingCol" class="h-3.5 w-3.5 animate-spin" />
-            <CheckCircle2 v-else class="h-3.5 w-3.5" />
-            <span class="text-xs">Coluna</span>
-            <ChevronDown class="h-3 w-3" />
+            <CheckCircle2 v-else class="h-3.5 w-3.5 shrink-0" />
+            <span class="max-w-[96px] truncate text-xs">{{ currentColumnName ?? 'Coluna' }}</span>
+            <ChevronDown class="h-3 w-3 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" class="w-52">
@@ -536,12 +548,12 @@ const colunaOptions = computed(() =>
             size="sm"
             class="h-8 gap-1"
             :disabled="movingFunil || changeFunilOptions.length === 0"
-            title="Mudar de funil"
+            :title="currentFunilName ? `Funil: ${currentFunilName}` : 'Mudar de funil'"
           >
             <Loader2 v-if="movingFunil" class="h-3.5 w-3.5 animate-spin" />
-            <Target v-else class="h-3.5 w-3.5" />
-            <span class="text-xs">Funil</span>
-            <ChevronDown class="h-3 w-3" />
+            <Target v-else class="h-3.5 w-3.5 shrink-0" />
+            <span class="max-w-[96px] truncate text-xs">{{ currentFunilName ?? 'Funil' }}</span>
+            <ChevronDown class="h-3 w-3 shrink-0" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" class="w-52">
