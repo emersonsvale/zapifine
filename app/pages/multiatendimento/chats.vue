@@ -346,6 +346,26 @@ async function onLeadDeletedFromPanel() {
   await Promise.all([refreshLeads(), refreshConversations()])
 }
 
+// Após salvar/mover no painel: atualiza listas e re-busca o lead (caso tenha
+// mudado de funil e saído do store do funil ativo), pra o painel refletir.
+async function onPanelSaved() {
+  await Promise.all([refreshLeads(), refreshConversations()])
+  const leadId = selectedConversation.value?.leads?.id
+  if (!leadId) return
+  if (leads.value?.some((l) => l.id === leadId)) {
+    fetchedLead.value = null
+    fetchedLeadId.value = null
+    return
+  }
+  const { data } = await supabase
+    .from('leads')
+    .select('*')
+    .eq('id', leadId)
+    .maybeSingle()
+  fetchedLead.value = (data as Lead | null) ?? null
+  fetchedLeadId.value = leadId
+}
+
 // Painel docado avisa quando tem edição não salva; guardamos a troca de conversa.
 const leadPanelDirty = ref(false)
 
@@ -1352,7 +1372,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         :lead="leadForDialog"
         :columns="columns ?? []"
         @close="leadPanelOpen = false"
-        @saved="refreshConversations"
+        @saved="onPanelSaved"
         @deleted="onLeadDeletedFromPanel"
         @dirty="(v) => (leadPanelDirty = v)"
         @transfer="openTransfer('user')"

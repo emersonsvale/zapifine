@@ -37,7 +37,7 @@ import {
 
 type Lead = Database['public']['Tables']['leads']['Row']
 type Column = Database['public']['Tables']['ff_colunas_funil']['Row']
-type TabId = 'dados' | 'empresa' | 'endereco' | 'negocio' | 'notas'
+type TabId = 'dados' | 'empresa' | 'endereco' | 'negocio'
 
 const props = defineProps<{
   lead: Lead | null
@@ -60,15 +60,37 @@ const emit = defineEmits<{
 const { updateLead, deleteLead, toggleIa, leads: allLeads, moveLead, moveLeadToFunil } = useLeads()
 const { funis } = useFunis()
 const { toast, confirm } = useAlerts()
+const supabase = useSupabaseClient<Database>()
 
 const movingFunil = ref(false)
 const movingCol = ref(false)
+
+// Colunas do funil DO LEAD (não do funil ativo do chat) — carregadas sob demanda,
+// pra o dropdown de coluna e o nome da coluna refletirem o funil correto.
+const funilColumns = ref<Column[]>([])
+watch(
+  () => props.lead?.funil_id,
+  async (funilId) => {
+    if (!funilId) {
+      funilColumns.value = []
+      return
+    }
+    const { data } = await supabase
+      .from('ff_colunas_funil')
+      .select('*')
+      .eq('funil_id', funilId)
+      .order('position', { ascending: true, nullsFirst: false })
+      .order('id', { ascending: true })
+    funilColumns.value = (data as Column[] | null) ?? []
+  },
+  { immediate: true },
+)
 
 // Nome da coluna/funil atuais do lead (mostrados nos botões do header).
 const currentColumnName = computed(() => {
   const id = props.lead?.coluna_id
   if (id == null) return null
-  return (props.columns ?? []).find((c) => c.id === id)?.nome_coluna ?? null
+  return funilColumns.value.find((c) => c.id === id)?.nome_coluna ?? null
 })
 const currentFunilName = computed(() => {
   const id = props.lead?.funil_id
@@ -76,9 +98,9 @@ const currentFunilName = computed(() => {
   return (funis.value ?? []).find((f) => f.id === id)?.nome_funil ?? null
 })
 
-// Opções para os dropdowns do header (excluem a coluna/funil atuais do lead).
+// Dropdown de coluna = colunas do funil do lead (menos a atual).
 const moveColumnOptions = computed(() =>
-  (props.columns ?? []).filter((c) => c.id !== props.lead?.coluna_id),
+  funilColumns.value.filter((c) => c.id !== props.lead?.coluna_id),
 )
 const changeFunilOptions = computed(() =>
   (funis.value ?? []).filter((f) => f.id !== props.lead?.funil_id),
@@ -89,8 +111,9 @@ async function onMoveColumn(colId: number) {
   movingCol.value = true
   try {
     await moveLead(props.lead.id, colId)
-    const t = (props.columns ?? []).find((c) => c.id === colId)
+    const t = funilColumns.value.find((c) => c.id === colId)
     toast.success(`Lead movido para "${t?.nome_coluna ?? 'coluna'}".`)
+    emit('saved')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
   } finally {
@@ -105,8 +128,9 @@ async function onChangeFunil(v: unknown) {
   movingFunil.value = true
   try {
     await moveLeadToFunil(props.lead.id, targetId)
-    toast.success('Lead movido para outro funil.')
-    emit('close')
+    const t = (funis.value ?? []).find((f) => f.id === targetId)
+    toast.success(`Lead movido para o funil "${t?.nome_funil ?? 'funil'}".`)
+    emit('saved')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
   } finally {
@@ -250,6 +274,8 @@ const tabFields: Record<TabId, (keyof FormShape)[]> = {
     'genero',
     'canal_preferido',
     'tags',
+    'resumo_lead',
+    'observacao',
   ],
   empresa: ['empresa', 'cargo', 'cnpj'],
   endereco: ['cep', 'rua', 'numero_endereco', 'complemento', 'bairro', 'cidade', 'estado'],
@@ -260,7 +286,6 @@ const tabFields: Record<TabId, (keyof FormShape)[]> = {
     'proxima_acao',
     'proxima_acao_data',
   ],
-  notas: ['resumo_lead', 'observacao'],
 }
 
 function isDirty(tab: TabId) {
@@ -272,7 +297,6 @@ const dirtyTabs = computed<Record<TabId, boolean>>(() => ({
   empresa: isDirty('empresa'),
   endereco: isDirty('endereco'),
   negocio: isDirty('negocio'),
-  notas: isDirty('notas'),
 }))
 
 const isAnyDirty = computed(() => Object.values(dirtyTabs.value).some(Boolean))
@@ -295,6 +319,8 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
       patch.canal_preferido = form.canal_preferido || null
       const tagList = form.tags.map((t) => t.trim()).filter(Boolean)
       patch.tags = tagList.length ? tagList : null
+      patch.resumo_lead = form.resumo_lead.trim() || null
+      patch.observacao = form.observacao.trim() || null
       break
     }
     case 'empresa':
@@ -321,10 +347,6 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
         : null
       break
     }
-    case 'notas':
-      patch.resumo_lead = form.resumo_lead.trim() || null
-      patch.observacao = form.observacao.trim() || null
-      break
   }
   return patch
 }
@@ -518,39 +540,6 @@ const phoneDisplay = computed(() => {
             variant="outline"
             size="sm"
             class="h-8 gap-1"
-            :disabled="movingCol || moveColumnOptions.length === 0"
-            :title="currentColumnName ? `Coluna: ${currentColumnName}` : 'Mover para outra coluna'"
-          >
-            <Loader2 v-if="movingCol" class="h-3.5 w-3.5 animate-spin" />
-            <CheckCircle2 v-else class="h-3.5 w-3.5 shrink-0" />
-            <span class="max-w-[96px] truncate text-xs">{{ currentColumnName ?? 'Coluna' }}</span>
-            <ChevronDown class="h-3 w-3 shrink-0" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" class="w-52">
-          <DropdownMenuLabel>Mover para coluna</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            v-for="col in moveColumnOptions"
-            :key="col.id"
-            :disabled="movingCol"
-            @select="onMoveColumn(col.id)"
-          >
-            <CheckCircle2 class="h-4 w-4 text-muted-foreground" />
-            {{ col.nome_coluna ?? `Coluna ${col.id}` }}
-          </DropdownMenuItem>
-          <DropdownMenuItem v-if="moveColumnOptions.length === 0" disabled>
-            Sem outras colunas
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger as-child>
-          <Button
-            variant="outline"
-            size="sm"
-            class="h-8 gap-1"
             :disabled="movingFunil || changeFunilOptions.length === 0"
             :title="currentFunilName ? `Funil: ${currentFunilName}` : 'Mudar de funil'"
           >
@@ -577,18 +566,50 @@ const phoneDisplay = computed(() => {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 gap-1"
+            :disabled="movingCol || moveColumnOptions.length === 0"
+            :title="currentColumnName ? `Coluna: ${currentColumnName}` : 'Mover para outra coluna'"
+          >
+            <Loader2 v-if="movingCol" class="h-3.5 w-3.5 animate-spin" />
+            <CheckCircle2 v-else class="h-3.5 w-3.5 shrink-0" />
+            <span class="max-w-[96px] truncate text-xs">{{ currentColumnName ?? 'Coluna' }}</span>
+            <ChevronDown class="h-3 w-3 shrink-0" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" class="w-52">
+          <DropdownMenuLabel>Mover para coluna</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            v-for="col in moveColumnOptions"
+            :key="col.id"
+            :disabled="movingCol"
+            @select="onMoveColumn(col.id)"
+          >
+            <CheckCircle2 class="h-4 w-4 text-muted-foreground" />
+            {{ col.nome_coluna ?? `Coluna ${col.id}` }}
+          </DropdownMenuItem>
+          <DropdownMenuItem v-if="moveColumnOptions.length === 0" disabled>
+            Sem outras colunas
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
 
     <Tabs v-model="activeTab" class="flex-1 flex flex-col overflow-hidden">
       <TabsList
-        class="mt-4 grid grid-cols-5"
+        class="mt-4 grid grid-cols-4"
         :class="docked ? 'mx-4 text-xs' : 'mx-6'"
       >
         <TabsTrigger value="dados">Dados</TabsTrigger>
         <TabsTrigger value="empresa">Empresa</TabsTrigger>
         <TabsTrigger value="endereco">Endereço</TabsTrigger>
         <TabsTrigger value="negocio">Negócio</TabsTrigger>
-        <TabsTrigger value="notas">Notas</TabsTrigger>
       </TabsList>
 
       <div class="flex-1 overflow-y-auto py-4" :class="docked ? 'px-4' : 'px-6'">
@@ -664,6 +685,22 @@ const phoneDisplay = computed(() => {
               v-model="form.tags"
               :suggestions="tagSuggestions"
               placeholder="Adicionar tags..."
+            />
+          </FieldRow>
+          <FieldRow label="Resumo (IA)" hint="Resumo do lead gerado automaticamente pela IA." :icon="Sparkles">
+            <textarea
+              v-model="form.resumo_lead"
+              rows="4"
+              class="flex w-full rounded-md border bg-muted/20 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              placeholder="Resumo gerado pela IA..."
+            />
+          </FieldRow>
+          <FieldRow label="Observações" hint="Anotações internas sobre o lead (não aparecem pro cliente)." :icon="MessageSquare">
+            <textarea
+              v-model="form.observacao"
+              rows="6"
+              class="flex w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              placeholder="Anotações internas..."
             />
           </FieldRow>
           <div class="flex justify-end pt-2">
@@ -817,37 +854,6 @@ const phoneDisplay = computed(() => {
           </div>
         </TabsContent>
 
-        <!-- NOTAS -->
-        <TabsContent value="notas" class="flex flex-col gap-6 mt-0">
-          <FieldRow label="Resumo (IA)" hint="Resumo do lead gerado automaticamente pela IA." :icon="Sparkles">
-            <textarea
-              v-model="form.resumo_lead"
-              rows="4"
-              class="flex w-full rounded-md border bg-muted/20 px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              placeholder="Resumo gerado pela IA..."
-            />
-          </FieldRow>
-          <FieldRow label="Observações" hint="Anotações internas sobre o lead (não aparecem pro cliente)." :icon="MessageSquare">
-            <textarea
-              v-model="form.observacao"
-              rows="6"
-              class="flex w-full rounded-md border bg-transparent px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-              placeholder="Anotações internas..."
-            />
-          </FieldRow>
-          <div class="flex justify-end pt-2">
-            <Button
-              type="button"
-              class="gap-1 bg-emerald-500 text-white hover:bg-emerald-600"
-              :disabled="!dirtyTabs.notas || savingTab === 'notas'"
-              @click="saveTab('notas')"
-            >
-              <Loader2 v-if="savingTab === 'notas'" class="h-4 w-4 animate-spin" />
-              <Save v-else class="h-4 w-4" />
-              {{ savingTab === 'notas' ? 'Salvando...' : 'Salvar' }}
-            </Button>
-          </div>
-        </TabsContent>
       </div>
     </Tabs>
   </div>
