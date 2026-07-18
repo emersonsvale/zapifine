@@ -8,6 +8,8 @@ const props = defineProps<{
   conversationId: number | null
   defaultNumber?: string | null
   defaultName?: string | null
+  /** Aba aberta ao abrir o modal. 'new' para ir direto em "Criar novo". */
+  initialTab?: 'existing' | 'new'
 }>()
 
 const emit = defineEmits<{ linked: [] }>()
@@ -28,7 +30,7 @@ const form = ref({
 
 watch(open, (v) => {
   if (!v) return
-  tab.value = 'existing'
+  tab.value = props.initialTab ?? 'existing'
   query.value = ''
   errorMsg.value = ''
   saving.value = false

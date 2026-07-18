@@ -13,6 +13,7 @@ import {
   BotOff,
   Eraser,
   Trash2,
+  UserRound,
   Image as ImageIcon,
   Link as LinkIcon,
   MapPin,
@@ -24,7 +25,6 @@ import {
   ArrowRightLeft,
   ChevronDown,
   Eye,
-  CheckCircle2,
   CalendarPlus,
   Workflow,
   PanelRightOpen,
@@ -223,10 +223,18 @@ const presenceLabel = computed(() => {
 })
 
 const linkLeadOpen = ref(false)
+const linkLeadTab = ref<'existing' | 'new'>('existing')
 const hasLead = computed(() => !!selectedConversation.value?.leads?.id)
 
 function openLinkLead() {
   if (!selectedConversation.value) return
+  linkLeadTab.value = 'existing'
+  linkLeadOpen.value = true
+}
+
+function openAddLead() {
+  if (!selectedConversation.value) return
+  linkLeadTab.value = 'new'
   linkLeadOpen.value = true
 }
 
@@ -262,8 +270,7 @@ async function onSendRich(
   }
 }
 
-const { leads, columns, refreshLeads, moveLead, moveLeadToFunil } = useLeads()
-const { funis } = useFunis()
+const { leads, columns, refreshLeads } = useLeads()
 const { toast, confirm } = useAlerts()
 
 const tagsByLeadId = computed<Record<number, string[]>>(() => {
@@ -285,10 +292,40 @@ watch(drawerOpen, async (open, wasOpen) => {
   }
 })
 
+// `leads` (useLeads) é filtrado pelo funil ativo. Se o lead da conversa está em
+// outro funil, não estará no store — buscamos ele sob demanda para o painel não
+// ficar com dados de um lead anterior (stale).
+const supabase = useSupabaseClient<Database>()
+const fetchedLead = ref<Lead | null>(null)
+const fetchedLeadId = ref<number | null>(null)
+
+watch(
+  () => selectedConversation.value?.leads?.id ?? null,
+  async (leadId) => {
+    if (!leadId || leads.value?.some((l) => l.id === leadId)) {
+      fetchedLead.value = null
+      fetchedLeadId.value = null
+      return
+    }
+    if (fetchedLeadId.value === leadId) return
+    const { data } = await supabase
+      .from('leads')
+      .select('*')
+      .eq('id', leadId)
+      .maybeSingle()
+    fetchedLead.value = (data as Lead | null) ?? null
+    fetchedLeadId.value = leadId
+  },
+  { immediate: true },
+)
+
 const leadForDialog = computed<Lead | null>(() => {
   const leadId = selectedConversation.value?.leads?.id
   if (!leadId) return null
-  return leads.value?.find((l) => l.id === leadId) ?? null
+  const inStore = leads.value?.find((l) => l.id === leadId)
+  if (inStore) return inStore
+  // Só usa o buscado se for do lead atual (evita mostrar o anterior durante o fetch).
+  return fetchedLeadId.value === leadId ? fetchedLead.value : null
 })
 
 function openLeadDrawer() {
@@ -687,31 +724,6 @@ const leadTags = computed<string[]>(() => {
   return Array.isArray(t) ? t.filter((x) => typeof x === 'string' && x.trim()) : []
 })
 
-const currentLeadColumnId = computed<number | null>(
-  () => leadForDialog.value?.coluna_id ?? null,
-)
-
-const currentLeadColumnName = computed(() => {
-  const id = currentLeadColumnId.value
-  if (id == null) return null
-  return (columns.value ?? []).find((c) => c.id === id)?.nome_coluna ?? null
-})
-
-const currentLeadFunilId = computed<number | null>(
-  () => leadForDialog.value?.funil_id ?? null,
-)
-
-const funilColumnOptions = computed(() =>
-  (columns.value ?? []).filter((c) => c.id !== currentLeadColumnId.value),
-)
-
-const otherFunis = computed(() =>
-  (funis.value ?? []).filter((f) => f.id !== currentLeadFunilId.value),
-)
-
-const concludeOpen = ref(false)
-const moving = ref(false)
-const movingFunil = ref(false)
 const agendaOpen = ref(false)
 
 const agendaPrefillTitle = computed(() => {
@@ -769,38 +781,6 @@ async function onAgendaCreated(data: {
     await sendText(lines.join('\n'))
   } catch {
     // não travar fluxo se falhar envio
-  }
-}
-
-async function onConclude(colunaId: number) {
-  const leadId = leadForDialog.value?.id
-  if (!leadId || moving.value) return
-  moving.value = true
-  concludeOpen.value = false
-  try {
-    await moveLead(leadId, colunaId)
-    const target = (columns.value ?? []).find((c) => c.id === colunaId)
-    toast.success(`Lead movido para "${target?.nome_coluna ?? 'coluna'}".`)
-  } catch (err) {
-    toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
-  } finally {
-    moving.value = false
-  }
-}
-
-async function onMoveToFunil(funilId: number) {
-  const leadId = leadForDialog.value?.id
-  if (!leadId || movingFunil.value) return
-  movingFunil.value = true
-  concludeOpen.value = false
-  try {
-    await moveLeadToFunil(leadId, funilId)
-    const target = (funis.value ?? []).find((f) => f.id === funilId)
-    toast.success(`Lead movido para o funil "${target?.nome_funil ?? 'funil'}".`)
-  } catch (err) {
-    toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
-  } finally {
-    movingFunil.value = false
   }
 }
 
@@ -1084,16 +1064,6 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             variant="outline"
             size="sm"
             class="gap-1"
-            title="Transferir atendimento"
-            @click="openTransfer('user')"
-          >
-            <ArrowRightLeft class="h-4 w-4" />
-            <span class="hidden text-xs sm:inline">Transferir</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            class="gap-1"
             :disabled="!hasLead"
             :title="!hasLead ? 'Vincule um lead para agendar' : 'Novo agendamento'"
             @click="agendaOpen = true"
@@ -1101,52 +1071,6 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             <CalendarPlus class="h-4 w-4" />
             <span class="hidden text-xs sm:inline">Agendar</span>
           </Button>
-          <DropdownMenu v-model:open="concludeOpen">
-            <DropdownMenuTrigger as-child>
-              <Button
-                variant="outline"
-                size="sm"
-                class="gap-1"
-                :disabled="!hasLead || moving || movingFunil || (funilColumnOptions.length === 0 && otherFunis.length === 0)"
-                :title="!hasLead ? 'Vincule um lead para concluir' : 'Mover lead de coluna ou funil'"
-              >
-                <Loader2 v-if="moving || movingFunil" class="h-4 w-4 animate-spin" />
-                <CheckCircle2 v-else class="h-4 w-4" />
-                <span class="hidden max-w-[120px] truncate text-xs sm:inline">{{ currentLeadColumnName ?? 'Concluir' }}</span>
-                <ChevronDown class="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" class="w-56">
-              <DropdownMenuLabel v-if="funilColumnOptions.length > 0">Mover para coluna</DropdownMenuLabel>
-              <DropdownMenuSeparator v-if="funilColumnOptions.length > 0" />
-              <DropdownMenuItem
-                v-for="col in funilColumnOptions"
-                :key="col.id"
-                :disabled="moving"
-                @select="onConclude(col.id)"
-              >
-                <CheckCircle2 class="h-4 w-4 text-muted-foreground" />
-                {{ col.nome_coluna ?? `Coluna ${col.id}` }}
-              </DropdownMenuItem>
-              <DropdownMenuItem v-if="funilColumnOptions.length === 0 && otherFunis.length === 0" disabled>
-                Nenhuma opção disponível
-              </DropdownMenuItem>
-              <template v-if="otherFunis.length > 0">
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel>Mudar de funil</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  v-for="f in otherFunis"
-                  :key="f.id"
-                  :disabled="movingFunil"
-                  @select="onMoveToFunil(f.id)"
-                >
-                  <ArrowRightLeft class="h-4 w-4 text-muted-foreground" />
-                  {{ f.nome_funil ?? `Funil ${f.id}` }}
-                </DropdownMenuItem>
-              </template>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button variant="ghost" size="icon" title="Ligar (em breve)" disabled>
             <Phone class="h-4 w-4" />
           </Button>
@@ -1197,11 +1121,11 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             </DropdownMenuContent>
           </DropdownMenu>
           <Button
-            v-if="hasLead"
+            v-if="selectedConversation && !isGroupConv"
             variant="ghost"
             size="icon"
             class="hidden shrink-0 xl:inline-flex"
-            :title="leadPanelOpen ? 'Minimizar dados do lead' : 'Maximizar dados do lead'"
+            :title="leadPanelOpen ? 'Minimizar painel do lead' : 'Maximizar painel do lead'"
             @click="toggleLeadPanel"
           >
             <PanelRightClose v-if="leadPanelOpen" class="h-4 w-4" />
@@ -1477,12 +1401,14 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       </template>
     </div>
 
-    <!-- LEAD PANEL COLUMN (form de dados docado à direita em telas ≥ xl) -->
+    <!-- LEAD PANEL COLUMN (painel do lead docado à direita em telas ≥ xl) -->
     <div
-      v-if="selectedConversation && hasLead && leadPanelOpen"
+      v-if="selectedConversation && !isGroupConv && leadPanelOpen"
       class="hidden h-full min-h-0 w-[380px] shrink-0 flex-col border-l xl:flex"
     >
       <LeadsLeadForm
+        v-if="hasLead"
+        :key="selectedConversation?.leads?.id ?? 'none'"
         docked
         :lead="leadForDialog"
         :columns="columns ?? []"
@@ -1490,7 +1416,43 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         @saved="refreshConversations"
         @deleted="onLeadDeletedFromPanel"
         @dirty="(v) => (leadPanelDirty = v)"
+        @transfer="openTransfer('user')"
       />
+      <!-- Sem lead vinculado: adicionar lead ou transferir -->
+      <div v-else class="flex h-full min-h-0 flex-col bg-background">
+        <div class="flex shrink-0 items-center justify-between border-b px-4 py-3">
+          <p class="text-sm font-semibold">Lead</p>
+          <button
+            type="button"
+            class="inline-flex h-7 w-7 items-center justify-center rounded hover:bg-accent text-muted-foreground"
+            title="Recolher painel"
+            @click="leadPanelOpen = false"
+          >
+            <PanelRightClose class="h-4 w-4" />
+          </button>
+        </div>
+        <div class="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
+          <div class="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+            <UserRound class="h-6 w-6 text-muted-foreground" />
+          </div>
+          <div class="space-y-1">
+            <p class="text-sm font-medium">Nenhum lead vinculado</p>
+            <p class="text-xs text-muted-foreground">
+              Adicione um lead para ver e editar os dados aqui.
+            </p>
+          </div>
+          <div class="flex w-full flex-col gap-2">
+            <Button class="w-full gap-1.5" @click="openAddLead">
+              <UserPlus class="h-4 w-4" />
+              Adicionar lead
+            </Button>
+            <Button variant="outline" class="w-full gap-1.5" @click="openTransfer('user')">
+              <ArrowRightLeft class="h-4 w-4" />
+              Transferir
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <LeadsLeadDrawer
@@ -1522,6 +1484,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
 
     <ChatsLinkLeadDialog
       v-model:open="linkLeadOpen"
+      :initial-tab="linkLeadTab"
       :conversation-id="selectedConversation?.id ?? null"
       :default-number="selectedConversation?.leads?.numero_whatsapp_lead ?? selectedConversation?.remoteJid ?? null"
       :default-name="selectedConversation?.leads?.nome_lead ?? null"

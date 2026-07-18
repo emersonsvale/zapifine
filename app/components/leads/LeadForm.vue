@@ -19,6 +19,9 @@ import {
   IdCard,
   Save,
   PanelRightClose,
+  ArrowRightLeft,
+  ChevronDown,
+  CheckCircle2,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -40,13 +43,38 @@ const emit = defineEmits<{
   (e: 'close'): void
   /** Há campos alterados e não salvos (para o shell avisar antes de descartar). */
   (e: 'dirty', value: boolean): void
+  /** Pede ao shell (chat) para abrir o fluxo de transferência da conversa. */
+  (e: 'transfer'): void
 }>()
 
-const { updateLead, deleteLead, toggleIa, leads: allLeads, moveLeadToFunil } = useLeads()
+const { updateLead, deleteLead, toggleIa, leads: allLeads, moveLead, moveLeadToFunil } = useLeads()
 const { funis } = useFunis()
 const { toast, confirm } = useAlerts()
 
 const movingFunil = ref(false)
+const movingCol = ref(false)
+
+// Opções para os dropdowns do header (excluem a coluna/funil atuais do lead).
+const moveColumnOptions = computed(() =>
+  (props.columns ?? []).filter((c) => c.id !== props.lead?.coluna_id),
+)
+const changeFunilOptions = computed(() =>
+  (funis.value ?? []).filter((f) => f.id !== props.lead?.funil_id),
+)
+
+async function onMoveColumn(colId: number) {
+  if (!props.lead || movingCol.value || colId === props.lead.coluna_id) return
+  movingCol.value = true
+  try {
+    await moveLead(props.lead.id, colId)
+    const t = (props.columns ?? []).find((c) => c.id === colId)
+    toast.success(`Lead movido para "${t?.nome_coluna ?? 'coluna'}".`)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao mover lead.')
+  } finally {
+    movingCol.value = false
+  }
+}
 
 async function onChangeFunil(v: unknown) {
   if (!v || !props.lead) return
@@ -113,6 +141,13 @@ const form = reactive({
 
 type FormShape = typeof form
 const initial = reactive<FormShape>({ ...form })
+// Snapshot vazio (form ainda pristino aqui) para limpar quando não há lead.
+const pristine: FormShape = JSON.parse(JSON.stringify(form))
+
+function resetForm() {
+  Object.assign(form, JSON.parse(JSON.stringify(pristine)))
+  Object.assign(initial, JSON.parse(JSON.stringify(pristine)))
+}
 
 const savingTab = ref<TabId | null>(null)
 const togglingIa = ref(false)
@@ -175,8 +210,8 @@ function hydrate(l: Lead) {
 watch(
   () => props.lead?.id,
   () => {
-    if (!props.lead) return
-    hydrate(props.lead)
+    if (props.lead) hydrate(props.lead)
+    else resetForm()
     activeTab.value = 'dados'
   },
   { immediate: true },
@@ -321,7 +356,9 @@ async function lookupCep() {
 
 watch(() => form.cep, (v) => {
   const digits = v.replace(/\D/g, '')
-  if (digits.length === 8) void lookupCep()
+  // Só auto-busca em edição do usuário (v difere do hidratado), nunca na hidratação —
+  // senão o preenchimento do ViaCEP marcaria o form como "sujo" sem o usuário mexer.
+  if (digits.length === 8 && v !== initial.cep) void lookupCep()
 })
 
 const iaAtiva = computed(() => !!props.lead?.ia_ativa)
@@ -457,6 +494,90 @@ async function onCollapse() {
           <PanelRightClose class="h-4 w-4" />
         </button>
       </div>
+    </div>
+
+    <!-- Ações rápidas: transferir conversa, mover coluna, mudar funil -->
+    <div
+      v-if="lead"
+      class="flex items-center gap-2 border-b py-2"
+      :class="docked ? 'px-4' : 'px-6'"
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        class="h-8 gap-1"
+        title="Transferir atendimento"
+        @click="emit('transfer')"
+      >
+        <ArrowRightLeft class="h-3.5 w-3.5" />
+        <span class="text-xs">Transferir</span>
+      </Button>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 gap-1"
+            :disabled="movingCol || moveColumnOptions.length === 0"
+            title="Mover para outra coluna"
+          >
+            <Loader2 v-if="movingCol" class="h-3.5 w-3.5 animate-spin" />
+            <CheckCircle2 v-else class="h-3.5 w-3.5" />
+            <span class="text-xs">Coluna</span>
+            <ChevronDown class="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" class="w-52">
+          <DropdownMenuLabel>Mover para coluna</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            v-for="col in moveColumnOptions"
+            :key="col.id"
+            :disabled="movingCol"
+            @select="onMoveColumn(col.id)"
+          >
+            <CheckCircle2 class="h-4 w-4 text-muted-foreground" />
+            {{ col.nome_coluna ?? `Coluna ${col.id}` }}
+          </DropdownMenuItem>
+          <DropdownMenuItem v-if="moveColumnOptions.length === 0" disabled>
+            Sem outras colunas
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger as-child>
+          <Button
+            variant="outline"
+            size="sm"
+            class="h-8 gap-1"
+            :disabled="movingFunil || changeFunilOptions.length === 0"
+            title="Mudar de funil"
+          >
+            <Loader2 v-if="movingFunil" class="h-3.5 w-3.5 animate-spin" />
+            <Target v-else class="h-3.5 w-3.5" />
+            <span class="text-xs">Funil</span>
+            <ChevronDown class="h-3 w-3" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" class="w-52">
+          <DropdownMenuLabel>Mudar de funil</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            v-for="f in changeFunilOptions"
+            :key="f.id"
+            :disabled="movingFunil"
+            @select="onChangeFunil(f.id)"
+          >
+            <ArrowRightLeft class="h-4 w-4 text-muted-foreground" />
+            {{ f.nome_funil ?? `Funil ${f.id}` }}
+          </DropdownMenuItem>
+          <DropdownMenuItem v-if="changeFunilOptions.length === 0" disabled>
+            Sem outros funis
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
 
     <Tabs v-model="activeTab" class="flex-1 flex flex-col overflow-hidden">
