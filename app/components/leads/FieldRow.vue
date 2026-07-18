@@ -10,8 +10,8 @@ defineProps<{
 </script>
 
 <template>
-  <div class="space-y-1.5">
-    <Label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+  <div class="space-y-2">
+    <Label class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
       <component :is="icon" v-if="icon" class="h-3.5 w-3.5" />
       <span>{{ label }}</span>
       <span class="ml-auto inline-flex items-center">

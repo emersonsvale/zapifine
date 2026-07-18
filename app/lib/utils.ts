@@ -42,6 +42,83 @@ export function formatPhone(raw: string | null | undefined): string {
   return `+${cc} ${chunks.join(' ')}`.trim()
 }
 
+/** Só dígitos, limitado a `max` caracteres. */
+function onlyDigits(v: string | null | undefined, max: number): string {
+  return String(v ?? '').replace(/\D/g, '').slice(0, max)
+}
+
+/** Máscara CPF: 000.000.000-00 (progressiva, para digitação). */
+export function maskCPF(v: string | null | undefined): string {
+  const d = onlyDigits(v, 11)
+  let out = d.slice(0, 3)
+  if (d.length > 3) out += '.' + d.slice(3, 6)
+  if (d.length > 6) out += '.' + d.slice(6, 9)
+  if (d.length > 9) out += '-' + d.slice(9, 11)
+  return out
+}
+
+/** Máscara CNPJ: 00.000.000/0000-00. */
+export function maskCNPJ(v: string | null | undefined): string {
+  const d = onlyDigits(v, 14)
+  let out = d.slice(0, 2)
+  if (d.length > 2) out += '.' + d.slice(2, 5)
+  if (d.length > 5) out += '.' + d.slice(5, 8)
+  if (d.length > 8) out += '/' + d.slice(8, 12)
+  if (d.length > 12) out += '-' + d.slice(12, 14)
+  return out
+}
+
+/** Máscara CEP: 00000-000. */
+export function maskCEP(v: string | null | undefined): string {
+  const d = onlyDigits(v, 8)
+  return d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d
+}
+
+/** Máscara telefone BR (aceita com/sem DDI 55). */
+export function maskPhoneBR(v: string | null | undefined): string {
+  const d = onlyDigits(v, 13)
+  if (!d) return ''
+  if (d.length >= 12 && d.startsWith('55')) {
+    const ddd = d.slice(2, 4)
+    const rest = d.slice(4)
+    const p1 = rest.slice(0, rest.length > 8 ? 5 : 4)
+    const p2 = rest.slice(p1.length)
+    return `+55 (${ddd}) ${p1}${p2 ? '-' + p2 : ''}`
+  }
+  const ddd = d.slice(0, 2)
+  if (d.length <= 2) return `(${ddd}`
+  const rest = d.slice(2, 11)
+  const p1 = rest.slice(0, rest.length > 8 ? 5 : 4)
+  const p2 = rest.slice(p1.length)
+  return `(${ddd}) ${p1}${p2 ? '-' + p2 : ''}`
+}
+
+/** Máscara monetária BR a partir da digitação (trata dígitos como centavos): 1.234,56. */
+export function maskMoneyBR(v: string | null | undefined): string {
+  const d = String(v ?? '').replace(/\D/g, '')
+  if (!d) return ''
+  return (Number(d) / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/** Formata um número (reais) para BR: 1.234,56. */
+export function formatMoneyBR(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(Number(n))) return ''
+  return Number(n).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
+}
+
+/** Converte "1.234,56" -> 1234.56 (ou null se vazio). */
+export function parseMoneyBR(v: string | null | undefined): number | null {
+  const d = String(v ?? '').replace(/\D/g, '')
+  if (!d) return null
+  return Number(d) / 100
+}
+
 export function publicAssetUrl(url: string | null | undefined): string | null {
   if (!url) return null
   try {

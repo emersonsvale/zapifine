@@ -23,7 +23,16 @@ import {
   CheckCircle2,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
-import { formatPhone } from '~/lib/utils'
+import {
+  formatPhone,
+  maskCPF,
+  maskCNPJ,
+  maskCEP,
+  maskPhoneBR,
+  maskMoneyBR,
+  formatMoneyBR,
+  parseMoneyBR,
+} from '~/lib/utils'
 
 type Lead = Database['public']['Tables']['leads']['Row']
 type Column = Database['public']['Tables']['ff_colunas_funil']['Row']
@@ -187,16 +196,16 @@ function hydrate(l: Lead) {
   const snap: FormShape = {
     nome_lead: l.nome_lead ?? '',
     email: (l as unknown as { 'e-mail'?: string | null })['e-mail'] ?? '',
-    numero_whatsapp_lead: l.numero_whatsapp_lead ?? '',
-    telefone_secundario: l.telefone_secundario ?? '',
-    cpf: l.cpf ?? '',
+    numero_whatsapp_lead: maskPhoneBR(l.numero_whatsapp_lead ?? ''),
+    telefone_secundario: maskPhoneBR(l.telefone_secundario ?? ''),
+    cpf: maskCPF(l.cpf ?? ''),
     data_nascimento: toDateInput(l.data_nascimento),
     genero: l.genero ?? '',
     canal_preferido: l.canal_preferido ?? '',
     empresa: l.empresa ?? '',
     cargo: l.cargo ?? '',
-    cnpj: l.cnpj ?? '',
-    cep: l.cep ?? '',
+    cnpj: maskCNPJ(l.cnpj ?? ''),
+    cep: maskCEP(l.cep ?? ''),
     rua: l.rua ?? '',
     numero_endereco: l.numero_endereco ?? '',
     complemento: l.complemento ?? '',
@@ -209,7 +218,7 @@ function hydrate(l: Lead) {
     tags: Array.isArray(l.tags)
       ? l.tags.filter((t): t is string => typeof t === 'string' && !!t.trim())
       : [],
-    valor_negocio: l.valor_negocio != null ? String(l.valor_negocio) : '',
+    valor_negocio: l.valor_negocio == null ? '' : formatMoneyBR(Number(l.valor_negocio)),
     proxima_acao: l.proxima_acao ?? '',
     proxima_acao_data: toDatetimeLocal(l.proxima_acao_data),
     resumo_lead: l.resumo_lead ?? '',
@@ -244,7 +253,6 @@ const tabFields: Record<TabId, (keyof FormShape)[]> = {
   empresa: ['empresa', 'cargo', 'cnpj'],
   endereco: ['cep', 'rua', 'numero_endereco', 'complemento', 'bairro', 'cidade', 'estado'],
   negocio: [
-    'coluna_id',
     'prioridade',
     'origem',
     'valor_negocio',
@@ -279,8 +287,8 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
       patch.nome_lead = form.nome_lead.trim() || null
       patch.email = form.email.trim() || null
       patch.numero_whatsapp_lead = form.numero_whatsapp_lead.replace(/\D/g, '') || null
-      patch.telefone_secundario = form.telefone_secundario.trim() || null
-      patch.cpf = form.cpf.trim() || null
+      patch.telefone_secundario = form.telefone_secundario.replace(/\D/g, '') || null
+      patch.cpf = form.cpf.replace(/\D/g, '') || null
       patch.data_nascimento = form.data_nascimento || null
       patch.genero = form.genero || null
       patch.canal_preferido = form.canal_preferido || null
@@ -291,7 +299,7 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
     case 'empresa':
       patch.empresa = form.empresa.trim() || null
       patch.cargo = form.cargo.trim() || null
-      patch.cnpj = form.cnpj.trim() || null
+      patch.cnpj = form.cnpj.replace(/\D/g, '') || null
       break
     case 'endereco':
       patch.cep = form.cep.replace(/\D/g, '') || null
@@ -303,11 +311,9 @@ function buildPatchForTab(tab: TabId): Record<string, unknown> {
       patch.estado = form.estado.trim() || null
       break
     case 'negocio': {
-      patch.coluna_id = form.coluna_id
       patch.prioridade = form.prioridade && form.prioridade !== 'none' ? form.prioridade : null
       patch.origem = form.origem.trim() || null
-      const n = form.valor_negocio === '' ? null : Number(form.valor_negocio)
-      patch.valor_negocio = n == null || Number.isNaN(n) ? null : n
+      patch.valor_negocio = parseMoneyBR(form.valor_negocio)
       patch.proxima_acao = form.proxima_acao.trim() || null
       patch.proxima_acao_data = form.proxima_acao_data
         ? new Date(form.proxima_acao_data).toISOString()
@@ -426,9 +432,6 @@ const phoneDisplay = computed(() => {
   return raw ? formatPhone(raw) : '—'
 })
 
-const colunaOptions = computed(() =>
-  (props.columns ?? []).slice().sort((a, b) => a.id - b.id),
-)
 </script>
 
 <template>
@@ -589,30 +592,45 @@ const colunaOptions = computed(() =>
 
       <div class="flex-1 overflow-y-auto py-4" :class="docked ? 'px-4' : 'px-6'">
         <!-- DADOS -->
-        <TabsContent value="dados" class="space-y-4 mt-0">
+        <TabsContent value="dados" class="flex flex-col gap-6 mt-0">
           <FieldRow label="Nome" :icon="UserIcon">
             <Input v-model="form.nome_lead" placeholder="Nome completo" />
           </FieldRow>
           <FieldRow label="E-mail" :icon="Mail">
-            <Input v-model="form.email" type="email" placeholder="email@exemplo.com" />
+            <Input v-model="form.email" type="email" placeholder="email@exemplo.com" inputmode="email" />
           </FieldRow>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-2 gap-4">
             <FieldRow label="WhatsApp" :icon="Phone">
-              <Input v-model="form.numero_whatsapp_lead" placeholder="5511..." inputmode="tel" />
+              <Input
+                :model-value="form.numero_whatsapp_lead"
+                placeholder="+55 (11) 90000-0000"
+                inputmode="tel"
+                @update:model-value="(v) => (form.numero_whatsapp_lead = maskPhoneBR(String(v)))"
+              />
             </FieldRow>
             <FieldRow label="Telefone 2" :icon="Phone">
-              <Input v-model="form.telefone_secundario" placeholder="Opcional" inputmode="tel" />
+              <Input
+                :model-value="form.telefone_secundario"
+                placeholder="(11) 0000-0000"
+                inputmode="tel"
+                @update:model-value="(v) => (form.telefone_secundario = maskPhoneBR(String(v)))"
+              />
             </FieldRow>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-2 gap-4">
             <FieldRow label="CPF" :icon="IdCard">
-              <Input v-model="form.cpf" placeholder="000.000.000-00" />
+              <Input
+                :model-value="form.cpf"
+                placeholder="000.000.000-00"
+                inputmode="numeric"
+                @update:model-value="(v) => (form.cpf = maskCPF(String(v)))"
+              />
             </FieldRow>
             <FieldRow label="Nascimento" :icon="Calendar">
               <Input v-model="form.data_nascimento" type="date" />
             </FieldRow>
           </div>
-          <div class="grid grid-cols-2 gap-3">
+          <div class="grid grid-cols-2 gap-4">
             <FieldRow label="Gênero" :icon="UserIcon">
               <Select v-model="form.genero">
                 <SelectTrigger>
@@ -662,7 +680,7 @@ const colunaOptions = computed(() =>
         </TabsContent>
 
         <!-- EMPRESA -->
-        <TabsContent value="empresa" class="space-y-4 mt-0">
+        <TabsContent value="empresa" class="flex flex-col gap-6 mt-0">
           <FieldRow label="Empresa" :icon="Building2">
             <Input v-model="form.empresa" placeholder="Nome da empresa" />
           </FieldRow>
@@ -670,7 +688,12 @@ const colunaOptions = computed(() =>
             <Input v-model="form.cargo" placeholder="Cargo/função" />
           </FieldRow>
           <FieldRow label="CNPJ" :icon="IdCard">
-            <Input v-model="form.cnpj" placeholder="00.000.000/0000-00" />
+            <Input
+              :model-value="form.cnpj"
+              placeholder="00.000.000/0000-00"
+              inputmode="numeric"
+              @update:model-value="(v) => (form.cnpj = maskCNPJ(String(v)))"
+            />
           </FieldRow>
           <div class="flex justify-end pt-2">
             <Button
@@ -687,19 +710,24 @@ const colunaOptions = computed(() =>
         </TabsContent>
 
         <!-- ENDEREÇO -->
-        <TabsContent value="endereco" class="space-y-4 mt-0">
+        <TabsContent value="endereco" class="flex flex-col gap-6 mt-0">
           <FieldRow label="CEP" :icon="MapPin">
             <div class="relative">
-              <Input v-model="form.cep" placeholder="00000-000" inputmode="numeric" />
+              <Input
+                :model-value="form.cep"
+                placeholder="00000-000"
+                inputmode="numeric"
+                @update:model-value="(v) => (form.cep = maskCEP(String(v)))"
+              />
               <Loader2 v-if="cepLoading" class="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
             </div>
           </FieldRow>
-          <div class="grid grid-cols-[1fr,120px] gap-3">
+          <div class="grid grid-cols-[1fr_110px] gap-4">
             <FieldRow label="Rua" :icon="MapPin">
               <Input v-model="form.rua" placeholder="Logradouro" />
             </FieldRow>
             <FieldRow label="Número">
-              <Input v-model="form.numero_endereco" placeholder="Nº" />
+              <Input v-model="form.numero_endereco" placeholder="Nº" inputmode="numeric" />
             </FieldRow>
           </div>
           <FieldRow label="Complemento">
@@ -708,12 +736,18 @@ const colunaOptions = computed(() =>
           <FieldRow label="Bairro">
             <Input v-model="form.bairro" placeholder="Bairro" />
           </FieldRow>
-          <div class="grid grid-cols-[1fr,120px] gap-3">
+          <div class="grid grid-cols-[1fr_90px] gap-4">
             <FieldRow label="Cidade">
               <Input v-model="form.cidade" placeholder="Cidade" />
             </FieldRow>
             <FieldRow label="UF">
-              <Input v-model="form.estado" placeholder="UF" maxlength="2" />
+              <Input
+                :model-value="form.estado"
+                placeholder="UF"
+                maxlength="2"
+                class="uppercase"
+                @update:model-value="(v) => (form.estado = String(v).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2))"
+              />
             </FieldRow>
           </div>
           <div class="flex justify-end pt-2">
@@ -731,46 +765,8 @@ const colunaOptions = computed(() =>
         </TabsContent>
 
         <!-- NEGÓCIO -->
-        <TabsContent value="negocio" class="space-y-4 mt-0">
-          <FieldRow label="Funil" :icon="Target">
-            <Select
-              :model-value="lead?.funil_id != null ? String(lead.funil_id) : undefined"
-              :disabled="movingFunil"
-              @update:model-value="onChangeFunil"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o funil" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem
-                  v-for="f in funis ?? []"
-                  :key="f.id"
-                  :value="String(f.id)"
-                >
-                  {{ f.nome_funil ?? 'Sem nome' }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-            <p class="mt-1 text-[11px] text-muted-foreground">
-              Mover para outro funil coloca o lead na coluna "Novo" desse funil.
-            </p>
-          </FieldRow>
-          <FieldRow label="Etapa do funil" :icon="Target">
-            <Select
-              :model-value="form.coluna_id != null ? String(form.coluna_id) : ''"
-              @update:model-value="(v) => (form.coluna_id = v ? Number(v) : null)"
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="c in colunaOptions" :key="c.id" :value="String(c.id)">
-                  {{ c.nome_coluna }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </FieldRow>
-          <div class="grid grid-cols-2 gap-3">
+        <TabsContent value="negocio" class="flex flex-col gap-6 mt-0">
+          <div class="grid grid-cols-2 gap-4">
             <FieldRow label="Prioridade" :icon="Target">
               <Select v-model="form.prioridade">
                 <SelectTrigger>
@@ -789,7 +785,16 @@ const colunaOptions = computed(() =>
             </FieldRow>
           </div>
           <FieldRow label="Valor do negócio" :icon="DollarSign">
-            <Input v-model="form.valor_negocio" type="number" step="0.01" placeholder="0,00" inputmode="decimal" />
+            <div class="relative">
+              <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
+              <Input
+                :model-value="form.valor_negocio"
+                placeholder="0,00"
+                inputmode="numeric"
+                class="pl-9"
+                @update:model-value="(v) => (form.valor_negocio = maskMoneyBR(String(v)))"
+              />
+            </div>
           </FieldRow>
           <FieldRow label="Próxima ação" :icon="Target">
             <Input v-model="form.proxima_acao" placeholder="Ex: enviar proposta" />
@@ -812,7 +817,7 @@ const colunaOptions = computed(() =>
         </TabsContent>
 
         <!-- NOTAS -->
-        <TabsContent value="notas" class="space-y-4 mt-0">
+        <TabsContent value="notas" class="flex flex-col gap-6 mt-0">
           <FieldRow label="Resumo (IA)" :icon="Sparkles">
             <textarea
               v-model="form.resumo_lead"
