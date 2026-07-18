@@ -311,8 +311,39 @@ watch(leadPanelOpen, (v) => {
     localStorage.setItem('chat-lead-panel-open', v ? '1' : '0')
   }
 })
-function toggleLeadPanel() {
+async function toggleLeadPanel() {
+  if (leadPanelOpen.value && leadPanelDirty.value) {
+    const ok = await confirm({
+      title: 'Alterações não salvas',
+      description: 'Há campos alterados e não salvos. Recolher o painel vai descartá-los.',
+      confirmLabel: 'Descartar e recolher',
+      variant: 'danger',
+    })
+    if (!ok) return
+  }
   leadPanelOpen.value = !leadPanelOpen.value
+}
+
+async function onLeadDeletedFromPanel() {
+  await Promise.all([refreshLeads(), refreshConversations()])
+}
+
+// Painel docado avisa quando tem edição não salva; guardamos a troca de conversa.
+const leadPanelDirty = ref(false)
+
+async function onPickConversation(id: number) {
+  if (id === selectedId.value) return
+  if (leadPanelDirty.value) {
+    const ok = await confirm({
+      title: 'Alterações não salvas',
+      description:
+        'Há dados do lead não salvos no painel. Trocar de conversa vai descartá-los.',
+      confirmLabel: 'Descartar e trocar',
+      variant: 'danger',
+    })
+    if (!ok) return
+  }
+  selectConversation(id)
 }
 
 async function onClearMessages() {
@@ -671,12 +702,6 @@ const currentLeadFunilId = computed<number | null>(
   () => leadForDialog.value?.funil_id ?? null,
 )
 
-const currentLeadFunilName = computed(() => {
-  const id = currentLeadFunilId.value
-  if (id == null) return null
-  return (funis.value ?? []).find((f) => f.id === id)?.nome_funil ?? null
-})
-
 const funilColumnOptions = computed(() =>
   (columns.value ?? []).filter((c) => c.id !== currentLeadColumnId.value),
 )
@@ -912,7 +937,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         :current-user-setor-id="currentUserSetorId"
         :company-id="companyId"
         :tags-by-lead-id="tagsByLeadId"
-        @select="selectConversation"
+        @select="onPickConversation"
       />
     </div>
 
@@ -1461,18 +1486,19 @@ const groupedMessages = computed<GroupedItem[]>(() => {
       </template>
     </div>
 
-    <!-- LEAD PANEL COLUMN (docado à direita em telas ≥ xl) -->
+    <!-- LEAD PANEL COLUMN (form de dados docado à direita em telas ≥ xl) -->
     <div
       v-if="selectedConversation && hasLead && leadPanelOpen"
-      class="hidden h-full min-h-0 w-[340px] shrink-0 flex-col border-l xl:flex"
+      class="hidden h-full min-h-0 w-[380px] shrink-0 flex-col border-l xl:flex"
     >
-      <LeadsLeadInfoPanel
+      <LeadsLeadForm
+        docked
         :lead="leadForDialog"
-        :funil-name="currentLeadFunilName"
-        :coluna-name="currentLeadColumnName"
-        :tags="leadTags"
-        @edit="openLeadDrawer"
+        :columns="columns ?? []"
         @close="leadPanelOpen = false"
+        @saved="refreshConversations"
+        @deleted="onLeadDeletedFromPanel"
+        @dirty="(v) => (leadPanelDirty = v)"
       />
     </div>
 
