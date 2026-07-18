@@ -21,10 +21,10 @@ defineProps<{
           <button
             type="button"
             tabindex="-1"
+            :aria-label="`Ajuda: ${label}`"
             class="inline-flex cursor-help text-muted-foreground/60 transition-colors hover:text-foreground"
           >
             <HelpCircle class="h-3 w-3" />
-            <span class="sr-only">Ajuda: {{ label }}</span>
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" :side-offset="6">
