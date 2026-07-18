@@ -23,6 +23,7 @@ import {
   CheckCircle2,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
+import FieldRow from './FieldRow.vue'
 import {
   formatPhone,
   maskCPF,

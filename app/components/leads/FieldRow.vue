@@ -13,16 +13,24 @@ defineProps<{
 
 <template>
   <div class="space-y-2">
-    <Label
-      :title="hint"
-      class="flex items-center gap-1.5 text-xs font-semibold text-foreground"
-    >
+    <Label class="flex items-center gap-1.5 text-xs font-semibold text-foreground">
       <component :is="icon" v-if="icon" class="h-3.5 w-3.5 text-muted-foreground" />
       <span>{{ label }}</span>
-      <HelpCircle
-        v-if="hint"
-        class="h-3 w-3 cursor-help text-muted-foreground/60"
-      />
+      <Tooltip v-if="hint">
+        <TooltipTrigger as-child>
+          <button
+            type="button"
+            tabindex="-1"
+            class="inline-flex cursor-help text-muted-foreground/60 transition-colors hover:text-foreground"
+          >
+            <HelpCircle class="h-3 w-3" />
+            <span class="sr-only">Ajuda: {{ label }}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top" :side-offset="6">
+          {{ hint }}
+        </TooltipContent>
+      </Tooltip>
       <span class="ml-auto inline-flex items-center">
         <Loader2 v-if="state === 'saving'" class="h-3 w-3 animate-spin text-muted-foreground" />
         <Check v-else-if="state === 'saved'" class="h-3 w-3 text-emerald-500" />
