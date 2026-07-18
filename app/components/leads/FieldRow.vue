@@ -1,19 +1,28 @@
 <script setup lang="ts">
-import { Loader2, Check, AlertCircle } from 'lucide-vue-next'
+import { Loader2, Check, AlertCircle, HelpCircle } from 'lucide-vue-next'
 import type { Component } from 'vue'
 
 defineProps<{
   label: string
   icon?: Component
+  /** Explicação do campo, mostrada ao passar o mouse (title nativo). */
+  hint?: string
   state?: 'idle' | 'saving' | 'saved' | 'error'
 }>()
 </script>
 
 <template>
   <div class="space-y-2">
-    <Label class="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-      <component :is="icon" v-if="icon" class="h-3.5 w-3.5" />
+    <Label
+      :title="hint"
+      class="flex items-center gap-1.5 text-xs font-semibold text-foreground"
+    >
+      <component :is="icon" v-if="icon" class="h-3.5 w-3.5 text-muted-foreground" />
       <span>{{ label }}</span>
+      <HelpCircle
+        v-if="hint"
+        class="h-3 w-3 cursor-help text-muted-foreground/60"
+      />
       <span class="ml-auto inline-flex items-center">
         <Loader2 v-if="state === 'saving'" class="h-3 w-3 animate-spin text-muted-foreground" />
         <Check v-else-if="state === 'saved'" class="h-3 w-3 text-emerald-500" />

@@ -593,14 +593,14 @@ const phoneDisplay = computed(() => {
       <div class="flex-1 overflow-y-auto py-4" :class="docked ? 'px-4' : 'px-6'">
         <!-- DADOS -->
         <TabsContent value="dados" class="flex flex-col gap-6 mt-0">
-          <FieldRow label="Nome" :icon="UserIcon">
+          <FieldRow label="Nome" hint="Nome completo do lead." :icon="UserIcon">
             <Input v-model="form.nome_lead" placeholder="Nome completo" />
           </FieldRow>
-          <FieldRow label="E-mail" :icon="Mail">
+          <FieldRow label="E-mail" hint="E-mail principal para contato." :icon="Mail">
             <Input v-model="form.email" type="email" placeholder="email@exemplo.com" inputmode="email" />
           </FieldRow>
           <div class="grid grid-cols-2 gap-4">
-            <FieldRow label="WhatsApp" :icon="Phone">
+            <FieldRow label="WhatsApp" hint="Número de WhatsApp com DDI e DDD. Ex: +55 (11) 90000-0000." :icon="Phone">
               <Input
                 :model-value="form.numero_whatsapp_lead"
                 placeholder="+55 (11) 90000-0000"
@@ -608,7 +608,7 @@ const phoneDisplay = computed(() => {
                 @update:model-value="(v) => (form.numero_whatsapp_lead = maskPhoneBR(String(v)))"
               />
             </FieldRow>
-            <FieldRow label="Telefone 2" :icon="Phone">
+            <FieldRow label="Telefone 2" hint="Telefone alternativo (fixo ou celular)." :icon="Phone">
               <Input
                 :model-value="form.telefone_secundario"
                 placeholder="(11) 0000-0000"
@@ -618,7 +618,7 @@ const phoneDisplay = computed(() => {
             </FieldRow>
           </div>
           <div class="grid grid-cols-2 gap-4">
-            <FieldRow label="CPF" :icon="IdCard">
+            <FieldRow label="CPF" hint="CPF do lead (pessoa física)." :icon="IdCard">
               <Input
                 :model-value="form.cpf"
                 placeholder="000.000.000-00"
@@ -626,12 +626,12 @@ const phoneDisplay = computed(() => {
                 @update:model-value="(v) => (form.cpf = maskCPF(String(v)))"
               />
             </FieldRow>
-            <FieldRow label="Nascimento" :icon="Calendar">
+            <FieldRow label="Nascimento" hint="Data de nascimento do lead." :icon="Calendar">
               <Input v-model="form.data_nascimento" type="date" />
             </FieldRow>
           </div>
           <div class="grid grid-cols-2 gap-4">
-            <FieldRow label="Gênero" :icon="UserIcon">
+            <FieldRow label="Gênero" hint="Gênero do lead." :icon="UserIcon">
               <Select v-model="form.genero">
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
@@ -644,7 +644,7 @@ const phoneDisplay = computed(() => {
                 </SelectContent>
               </Select>
             </FieldRow>
-            <FieldRow label="Canal preferido" :icon="MessageSquare">
+            <FieldRow label="Canal preferido" hint="Canal preferido do lead para contato." :icon="MessageSquare">
               <Select v-model="form.canal_preferido">
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
@@ -658,7 +658,7 @@ const phoneDisplay = computed(() => {
               </Select>
             </FieldRow>
           </div>
-          <FieldRow label="Tags" :icon="Tag">
+          <FieldRow label="Tags" hint="Etiquetas para organizar e filtrar leads." :icon="Tag">
             <LeadsTagsSelect
               v-model="form.tags"
               :suggestions="tagSuggestions"
@@ -681,13 +681,13 @@ const phoneDisplay = computed(() => {
 
         <!-- EMPRESA -->
         <TabsContent value="empresa" class="flex flex-col gap-6 mt-0">
-          <FieldRow label="Empresa" :icon="Building2">
+          <FieldRow label="Empresa" hint="Empresa onde o lead trabalha." :icon="Building2">
             <Input v-model="form.empresa" placeholder="Nome da empresa" />
           </FieldRow>
-          <FieldRow label="Cargo" :icon="Briefcase">
+          <FieldRow label="Cargo" hint="Cargo ou função do lead na empresa." :icon="Briefcase">
             <Input v-model="form.cargo" placeholder="Cargo/função" />
           </FieldRow>
-          <FieldRow label="CNPJ" :icon="IdCard">
+          <FieldRow label="CNPJ" hint="CNPJ da empresa (pessoa jurídica)." :icon="IdCard">
             <Input
               :model-value="form.cnpj"
               placeholder="00.000.000/0000-00"
@@ -711,7 +711,7 @@ const phoneDisplay = computed(() => {
 
         <!-- ENDEREÇO -->
         <TabsContent value="endereco" class="flex flex-col gap-6 mt-0">
-          <FieldRow label="CEP" :icon="MapPin">
+          <FieldRow label="CEP" hint="CEP do endereço — preenche rua, bairro, cidade e UF automaticamente." :icon="MapPin">
             <div class="relative">
               <Input
                 :model-value="form.cep"
@@ -723,24 +723,24 @@ const phoneDisplay = computed(() => {
             </div>
           </FieldRow>
           <div class="grid grid-cols-[1fr_110px] gap-4">
-            <FieldRow label="Rua" :icon="MapPin">
+            <FieldRow label="Rua" hint="Logradouro (rua, avenida...)." :icon="MapPin">
               <Input v-model="form.rua" placeholder="Logradouro" />
             </FieldRow>
-            <FieldRow label="Número">
+            <FieldRow label="Número" hint="Número do endereço.">
               <Input v-model="form.numero_endereco" placeholder="Nº" inputmode="numeric" />
             </FieldRow>
           </div>
-          <FieldRow label="Complemento">
+          <FieldRow label="Complemento" hint="Apartamento, bloco, sala, referência...">
             <Input v-model="form.complemento" placeholder="Apto, bloco..." />
           </FieldRow>
-          <FieldRow label="Bairro">
+          <FieldRow label="Bairro" hint="Bairro do endereço.">
             <Input v-model="form.bairro" placeholder="Bairro" />
           </FieldRow>
           <div class="grid grid-cols-[1fr_90px] gap-4">
-            <FieldRow label="Cidade">
+            <FieldRow label="Cidade" hint="Cidade do endereço.">
               <Input v-model="form.cidade" placeholder="Cidade" />
             </FieldRow>
-            <FieldRow label="UF">
+            <FieldRow label="UF" hint="Estado (sigla de 2 letras, ex: SP).">
               <Input
                 :model-value="form.estado"
                 placeholder="UF"
@@ -767,7 +767,7 @@ const phoneDisplay = computed(() => {
         <!-- NEGÓCIO -->
         <TabsContent value="negocio" class="flex flex-col gap-6 mt-0">
           <div class="grid grid-cols-2 gap-4">
-            <FieldRow label="Prioridade" :icon="Target">
+            <FieldRow label="Prioridade" hint="Prioridade do lead no atendimento/funil." :icon="Target">
               <Select v-model="form.prioridade">
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione" />
@@ -780,11 +780,11 @@ const phoneDisplay = computed(() => {
                 </SelectContent>
               </Select>
             </FieldRow>
-            <FieldRow label="Origem" :icon="Target">
+            <FieldRow label="Origem" hint="Como o lead chegou até você (indicação, anúncio...)." :icon="Target">
               <Input v-model="form.origem" placeholder="Como nos encontrou?" />
             </FieldRow>
           </div>
-          <FieldRow label="Valor do negócio" :icon="DollarSign">
+          <FieldRow label="Valor do negócio" hint="Valor estimado da oportunidade em reais." :icon="DollarSign">
             <div class="relative">
               <span class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">R$</span>
               <Input
@@ -796,10 +796,10 @@ const phoneDisplay = computed(() => {
               />
             </div>
           </FieldRow>
-          <FieldRow label="Próxima ação" :icon="Target">
+          <FieldRow label="Próxima ação" hint="Próximo passo com esse lead (ex: enviar proposta)." :icon="Target">
             <Input v-model="form.proxima_acao" placeholder="Ex: enviar proposta" />
           </FieldRow>
-          <FieldRow label="Data da próxima ação" :icon="Calendar">
+          <FieldRow label="Data da próxima ação" hint="Quando executar a próxima ação." :icon="Calendar">
             <Input v-model="form.proxima_acao_data" type="datetime-local" />
           </FieldRow>
           <div class="flex justify-end pt-2">
@@ -818,7 +818,7 @@ const phoneDisplay = computed(() => {
 
         <!-- NOTAS -->
         <TabsContent value="notas" class="flex flex-col gap-6 mt-0">
-          <FieldRow label="Resumo (IA)" :icon="Sparkles">
+          <FieldRow label="Resumo (IA)" hint="Resumo do lead gerado automaticamente pela IA." :icon="Sparkles">
             <textarea
               v-model="form.resumo_lead"
               rows="4"
@@ -826,7 +826,7 @@ const phoneDisplay = computed(() => {
               placeholder="Resumo gerado pela IA..."
             />
           </FieldRow>
-          <FieldRow label="Observações" :icon="MessageSquare">
+          <FieldRow label="Observações" hint="Anotações internas sobre o lead (não aparecem pro cliente)." :icon="MessageSquare">
             <textarea
               v-model="form.observacao"
               rows="6"
