@@ -28,6 +28,8 @@ import {
   CheckCircle2,
   CalendarPlus,
   Workflow,
+  PanelRightOpen,
+  PanelRightClose,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 import { formatPhone } from '~/lib/utils'
@@ -296,6 +298,21 @@ function openLeadDrawer() {
     return
   }
   drawerOpen.value = true
+}
+
+// Painel de dados do lead docado à direita (telas ≥ xl). Estado lembrado.
+const leadPanelOpen = ref(true)
+onMounted(() => {
+  const saved = localStorage.getItem('chat-lead-panel-open')
+  if (saved != null) leadPanelOpen.value = saved === '1'
+})
+watch(leadPanelOpen, (v) => {
+  if (import.meta.client) {
+    localStorage.setItem('chat-lead-panel-open', v ? '1' : '0')
+  }
+})
+function toggleLeadPanel() {
+  leadPanelOpen.value = !leadPanelOpen.value
 }
 
 async function onClearMessages() {
@@ -1025,6 +1042,17 @@ const groupedMessages = computed<GroupedItem[]>(() => {
             Assumir
           </Button>
           <Button
+            v-if="hasLead"
+            variant="ghost"
+            size="icon"
+            class="hidden shrink-0 xl:inline-flex"
+            :title="leadPanelOpen ? 'Ocultar dados do lead' : 'Mostrar dados do lead'"
+            @click="toggleLeadPanel"
+          >
+            <PanelRightClose v-if="leadPanelOpen" class="h-4 w-4" />
+            <PanelRightOpen v-else class="h-4 w-4" />
+          </Button>
+          <Button
             :variant="iaAtiva ? 'default' : 'outline'"
             size="sm"
             :disabled="togglingIa || !selectedConversation?.leads?.id"
@@ -1431,6 +1459,21 @@ const groupedMessages = computed<GroupedItem[]>(() => {
           </div>
         </div>
       </template>
+    </div>
+
+    <!-- LEAD PANEL COLUMN (docado à direita em telas ≥ xl) -->
+    <div
+      v-if="selectedConversation && hasLead && leadPanelOpen"
+      class="hidden h-full min-h-0 w-[340px] shrink-0 flex-col border-l xl:flex"
+    >
+      <LeadsLeadInfoPanel
+        :lead="leadForDialog"
+        :funil-name="currentLeadFunilName"
+        :coluna-name="currentLeadColumnName"
+        :tags="leadTags"
+        @edit="openLeadDrawer"
+        @close="leadPanelOpen = false"
+      />
     </div>
 
     <LeadsLeadDrawer
