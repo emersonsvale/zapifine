@@ -8,6 +8,7 @@ import {
   X,
   Check,
   Bot,
+  Archive,
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
 } from 'lucide-vue-next'
@@ -40,6 +41,7 @@ type Conv = {
   provider?: string | null
   funil_nome?: string | null
   coluna_nome?: string | null
+  arquivada?: boolean
 }
 
 type Setor = { id: string; nome: string; cor: string | null }
@@ -66,7 +68,7 @@ function tagsFor(c: Conv): string[] {
   return props.tagsByLeadId?.[id] ?? []
 }
 
-type FilterMode = 'todas' | 'minhas' | 'sem' | 'setor'
+type FilterMode = 'todas' | 'minhas' | 'sem' | 'setor' | 'arquivadas'
 const filterMode = ref<FilterMode>('todas')
 
 const emit = defineEmits<{ select: [id: number] }>()
@@ -178,6 +180,12 @@ const filtered = computed(() => {
   const uid = props.currentUserId ?? null
   const mySetor = props.currentUserSetorId ?? null
   const list = (props.conversations ?? []).filter((c) => {
+    // Arquivadas ficam SÓ na aba "Arquivadas"; as demais abas as escondem.
+    if (filterMode.value === 'arquivadas') {
+      if (!c.arquivada) return false
+    } else if (c.arquivada) {
+      return false
+    }
     if (filterMode.value === 'minhas' && c.assigned_to !== uid) return false
     if (filterMode.value === 'sem' && c.assigned_to) return false
     if (filterMode.value === 'setor') {
@@ -232,11 +240,14 @@ const counts = computed(() => {
   const uid = props.currentUserId ?? null
   const mySetor = props.currentUserSetorId ?? null
   const all = props.conversations ?? []
+  // Abas normais contam só conversas ativas (não arquivadas).
+  const active = all.filter((c) => !c.arquivada)
   return {
-    todas: all.length,
-    minhas: all.filter((c) => c.assigned_to === uid).length,
-    sem: all.filter((c) => !c.assigned_to).length,
-    setor: mySetor ? all.filter((c) => c.setor_id === mySetor).length : 0,
+    todas: active.length,
+    minhas: active.filter((c) => c.assigned_to === uid).length,
+    sem: active.filter((c) => !c.assigned_to).length,
+    setor: mySetor ? active.filter((c) => c.setor_id === mySetor).length : 0,
+    arquivadas: all.filter((c) => c.arquivada).length,
   }
 })
 
@@ -540,6 +551,16 @@ function previewText(c: Conv) {
         >
           Setor ({{ counts.setor }})
         </button>
+        <button
+          type="button"
+          class="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 transition-colors"
+          :class="filterMode === 'arquivadas' ? 'bg-muted font-semibold' : 'text-muted-foreground hover:bg-muted/50'"
+          title="Conversas arquivadas"
+          @click="filterMode = 'arquivadas'"
+        >
+          <Archive class="h-3 w-3 shrink-0" />
+          Arquivadas ({{ counts.arquivadas }})
+        </button>
       </div>
       <div
         v-if="activeFilterCount > 0"
@@ -626,7 +647,7 @@ function previewText(c: Conv) {
         v-else-if="filtered.length === 0"
         class="px-4 py-6 text-center text-sm text-muted-foreground"
       >
-        Nenhuma conversa.
+        {{ filterMode === 'arquivadas' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.' }}
       </p>
 
       <ul v-else>

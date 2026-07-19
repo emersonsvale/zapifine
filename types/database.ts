@@ -2625,6 +2625,8 @@ export type Database = {
       }
       whats_conversa: {
         Row: {
+          arquivada: boolean
+          arquivada_em: string | null
           assigned_at: string | null
           assigned_to: string | null
           avatar_fetched_at: string | null
@@ -2642,6 +2644,8 @@ export type Database = {
           whatsapp_connection_id: string | null
         }
         Insert: {
+          arquivada?: boolean
+          arquivada_em?: string | null
           assigned_at?: string | null
           assigned_to?: string | null
           avatar_fetched_at?: string | null
@@ -2659,6 +2663,8 @@ export type Database = {
           whatsapp_connection_id?: string | null
         }
         Update: {
+          arquivada?: boolean
+          arquivada_em?: string | null
           assigned_at?: string | null
           assigned_to?: string | null
           avatar_fetched_at?: string | null
@@ -3243,6 +3249,7 @@ export type Database = {
           provider: Database["public"]["Enums"]["enum_whatsapp_provider"] | null
           funil_nome: string
           coluna_nome: string
+          arquivada: boolean
         }[]
       }
       cron_google_sync: { Args: never; Returns: undefined }

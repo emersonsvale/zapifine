@@ -27,6 +27,8 @@ import {
   Workflow,
   PanelRightOpen,
   PanelRightClose,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -50,6 +52,7 @@ const {
   toggleLeadIa,
   togglingIa,
   clearMessages,
+  archiveConversation,
   deleteConversation,
   presenceState,
   presenceMedia,
@@ -309,12 +312,22 @@ watch(
 )
 
 const leadForDialog = computed<Lead | null>(() => {
-  const leadId = selectedConversation.value?.leads?.id
+  const conv = selectedConversation.value
+  const leadId = conv?.leads?.id
   if (!leadId) return null
-  const inStore = leads.value?.find((l) => l.id === leadId)
-  if (inStore) return inStore
   // Só usa o buscado se for do lead atual (evita mostrar o anterior durante o fetch).
-  return fetchedLeadId.value === leadId ? fetchedLead.value : null
+  const base =
+    leads.value?.find((l) => l.id === leadId) ??
+    (fetchedLeadId.value === leadId ? fetchedLead.value : null)
+  if (!base) return null
+  // A foto exibida no chat/lista vem da conversa (whats_conversa.avatar_url); o
+  // lead em si costuma não ter avatar_url. Usa o avatar da conversa como fallback
+  // pra o painel de detalhes mostrar a mesma imagem.
+  const convAvatar = conv?.avatar_url ?? conv?.leads?.avatar_url ?? null
+  if (!base.avatar_url && convAvatar) {
+    return { ...base, avatar_url: convAvatar }
+  }
+  return base
 })
 
 
@@ -419,6 +432,18 @@ async function onDeleteConversation() {
     toast.success('Conversa excluída.')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Falha ao excluir.')
+  }
+}
+
+async function onToggleArchive() {
+  const c = selectedConversation.value
+  if (!c) return
+  const next = !c.arquivada
+  try {
+    await archiveConversation(c.id, next)
+    toast.success(next ? 'Conversa arquivada.' : 'Conversa desarquivada.')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao arquivar.')
   }
 }
 
@@ -1066,6 +1091,11 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 Vincular lead
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem @select="onToggleArchive">
+                <ArchiveRestore v-if="selectedConversation?.arquivada" class="h-4 w-4" />
+                <Archive v-else class="h-4 w-4" />
+                {{ selectedConversation?.arquivada ? 'Desarquivar conversa' : 'Arquivar conversa' }}
+              </DropdownMenuItem>
               <DropdownMenuItem @select="onClearMessages">
                 <Eraser class="h-4 w-4" />
                 Limpar conversa

@@ -34,6 +34,7 @@ type Conversation = {
   provider: string | null
   funil_nome: string | null
   coluna_nome: string | null
+  arquivada: boolean
 }
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
@@ -133,6 +134,7 @@ export function useChats() {
         provider: string | null
         funil_nome: string | null
         coluna_nome: string | null
+        arquivada: boolean | null
       }>
 
       const ids = rows.map((r) => r.id)
@@ -187,6 +189,7 @@ export function useChats() {
         provider: r.provider ?? null,
         funil_nome: r.funil_nome ?? null,
         coluna_nome: r.coluna_nome ?? null,
+        arquivada: !!r.arquivada,
       }))
     },
     { watch: [() => authUser.value?.id], default: () => [] },
@@ -574,6 +577,34 @@ export function useChats() {
       throw new Error('Não foi possível vincular o lead (verifique RLS).')
     }
     await refreshConversations()
+  }
+
+  async function archiveConversation(conversationId: number, next: boolean) {
+    const list = conversations.value ?? []
+    const idx = list.findIndex((c) => c.id === conversationId)
+    const prev = idx !== -1 ? list[idx]! : null
+    if (prev) {
+      const patched = list.slice()
+      patched[idx] = { ...prev, arquivada: next }
+      conversations.value = patched
+    }
+    const { data, error } = await supabase
+      .from('whats_conversa')
+      .update({
+        arquivada: next,
+        arquivada_em: next ? new Date().toISOString() : null,
+      } as never)
+      .eq('id', conversationId)
+      .select('id')
+    if (error || !data?.length) {
+      if (prev) {
+        const rollback = (conversations.value ?? []).slice()
+        const j = rollback.findIndex((c) => c.id === conversationId)
+        if (j !== -1) rollback[j] = prev
+        conversations.value = rollback
+      }
+      throw error ?? new Error('Não foi possível arquivar (verifique RLS).')
+    }
   }
 
   async function clearMessages(conversationId: number) {
@@ -1034,6 +1065,9 @@ export function useChats() {
         isRecebida && !isOpen
           ? (prev.unread_count ?? 0) + 1
           : prev.unread_count ?? 0,
+      // Msg recebida desarquiva (espelha o trigger unarchive_on_incoming_message
+      // no banco), pra conversa voltar a Todas na hora, sem esperar refresh.
+      arquivada: isRecebida ? false : prev.arquivada,
     }
     const rest = list.slice(0, idx).concat(list.slice(idx + 1))
     // Reordena: conversa patcheada no topo (ordenação por last_message_at desc).
@@ -1426,6 +1460,7 @@ export function useChats() {
     toggleLeadIa,
     togglingIa,
     clearMessages,
+    archiveConversation,
     deleteConversation,
     presenceState,
     presenceMedia,
