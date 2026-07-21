@@ -35,6 +35,7 @@ type Conversation = {
   funil_nome: string | null
   coluna_nome: string | null
   arquivada: boolean
+  fixada: boolean
 }
 
 type Message = Database['public']['Tables']['whats_mensagens_conversa']['Row']
@@ -135,6 +136,7 @@ export function useChats() {
         funil_nome: string | null
         coluna_nome: string | null
         arquivada: boolean | null
+        fixada: boolean | null
       }>
 
       const ids = rows.map((r) => r.id)
@@ -190,6 +192,7 @@ export function useChats() {
         funil_nome: r.funil_nome ?? null,
         coluna_nome: r.coluna_nome ?? null,
         arquivada: !!r.arquivada,
+        fixada: !!r.fixada,
       }))
     },
     { watch: [() => authUser.value?.id], default: () => [] },
@@ -604,6 +607,48 @@ export function useChats() {
         conversations.value = rollback
       }
       throw error ?? new Error('Não foi possível arquivar (verifique RLS).')
+    }
+  }
+
+  // Fixar/desafixar conversa no topo (por atendente). chat_pins é RLS-scoped
+  // por auth.uid(); pin é pessoal, sem realtime (atualização só otimista/local).
+  async function pinConversation(conversationId: number, next: boolean) {
+    const uid = authUser.value?.id
+    const cid = companyId.value
+    if (!uid || !cid) return
+    const list = conversations.value ?? []
+    const idx = list.findIndex((c) => c.id === conversationId)
+    const prev = idx !== -1 ? list[idx]! : null
+    if (prev) {
+      const patched = list.slice()
+      patched[idx] = { ...prev, fixada: next }
+      conversations.value = patched
+    }
+    try {
+      if (next) {
+        const { error } = await supabase
+          .from('chat_pins' as never)
+          .upsert(
+            { companies_id: cid, user_id: uid, conversa_id: conversationId } as never,
+            { onConflict: 'user_id,conversa_id', ignoreDuplicates: true } as never,
+          )
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('chat_pins' as never)
+          .delete()
+          .eq('user_id', uid)
+          .eq('conversa_id', conversationId)
+        if (error) throw error
+      }
+    } catch (err) {
+      if (prev) {
+        const rollback = (conversations.value ?? []).slice()
+        const j = rollback.findIndex((c) => c.id === conversationId)
+        if (j !== -1) rollback[j] = prev
+        conversations.value = rollback
+      }
+      throw err
     }
   }
 
@@ -1202,8 +1247,12 @@ export function useChats() {
           },
           (payload) => {
             console.log('[useChats] thread INSERT msg:', (payload.new as any).id, 'status:', (payload.new as any).status)
-            if (selectedId.value !== id) return
             const row = payload.new as Message
+            // Só mensagens DESTA conversa. O canal não tem filtro server-side,
+            // então a RLS entrega toda msg da empresa; sem esse guard, msg de
+            // outra conversa vazava pra dentro da thread aberta.
+            if ((row as unknown as { whats_conversa_id?: number | null }).whats_conversa_id !== id) return
+            if (selectedId.value !== id) return
             const list = messages.value ?? []
             if (list.find((m) => m.id === row.id)) return
             const optimisticIdx = list.findIndex(
@@ -1233,8 +1282,9 @@ export function useChats() {
             table: 'whats_mensagens_conversa',
           },
           (payload) => {
-            if (selectedId.value !== id) return
             const row = payload.new as Message
+            if ((row as unknown as { whats_conversa_id?: number | null }).whats_conversa_id !== id) return
+            if (selectedId.value !== id) return
             const list = messages.value ?? []
             const idx = list.findIndex((m) => m.id === row.id)
             if (idx === -1) return
@@ -1358,11 +1408,52 @@ export function useChats() {
     }
   }
 
+  function channelJoined(ch: ReturnType<typeof supabase.channel> | null): boolean {
+    if (!ch) return false
+    // RealtimeChannel.state: 'closed' | 'errored' | 'joined' | 'joining' | 'leaving'
+    const st = (ch as unknown as { state?: string }).state
+    return st === 'joined' || st === 'joining'
+  }
+
+  // Recria canais que caíram. O Realtime fecha o canal quando o token expira
+  // (~1h); o setAuth do token novo NÃO ressuscita canal já fechado. Sem isso,
+  // quem deixa a aba aberta e focada >1h para de receber em tempo real até F5.
+  let _healthRunning = false
+  async function realtimeHealthCheck() {
+    if (_healthRunning) return
+    _healthRunning = true
+    try {
+      const cid = companyId.value
+      const sel = selectedId.value
+      const needGlobal = !!cid && !channelJoined(globalChannel)
+      const needThread = !!sel && !channelJoined(threadChannel)
+      const needPresence = !!sel && !channelJoined(presenceChannel)
+      if (!needGlobal && !needThread && !needPresence) return
+      await syncRealtimeAuth()
+      if (needGlobal) { _globalChannelCid = null; await setupGlobalChannel(cid as string) }
+      if (needThread) { _threadChannelId = null; await setupThreadChannel(sel as number) }
+      if (needPresence) { _presenceChannelId = null; await setupPresenceChannel(sel as number) }
+    } finally {
+      _healthRunning = false
+    }
+  }
+
   if (import.meta.client && isPrimary) {
     syncRealtimeAuth()
-    supabase.auth.onAuthStateChange(() => {
-      syncRealtimeAuth()
+    supabase.auth.onAuthStateChange((event) => {
+      void (async () => {
+        await syncRealtimeAuth()
+        // Token renovou (ou re-login): o Realtime pode ter fechado os canais no
+        // vencimento do token antigo. Revalida e recria os que caíram.
+        if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
+          await realtimeHealthCheck()
+        }
+      })()
     })
+
+    // Health-check periódico: rede oscila, token expira, canal erra em silêncio.
+    // A cada 25s garante thread/global/presence "joined"; recria os que caíram.
+    const healthTimer = setInterval(() => { void realtimeHealthCheck() }, 25_000)
 
     watch(
       selectedId,
@@ -1428,6 +1519,7 @@ export function useChats() {
     window.addEventListener('focus', onVisible)
 
     onBeforeUnmount(async () => {
+      clearInterval(healthTimer)
       document.removeEventListener('visibilitychange', _onVisibilityChange)
       window.removeEventListener('focus', onVisible)
       await teardownThreadChannel()
@@ -1461,6 +1553,7 @@ export function useChats() {
     togglingIa,
     clearMessages,
     archiveConversation,
+    pinConversation,
     deleteConversation,
     presenceState,
     presenceMedia,

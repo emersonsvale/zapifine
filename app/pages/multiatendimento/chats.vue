@@ -53,6 +53,7 @@ const {
   togglingIa,
   clearMessages,
   archiveConversation,
+  pinConversation,
   deleteConversation,
   presenceState,
   presenceMedia,
@@ -444,6 +445,14 @@ async function onToggleArchive() {
     toast.success(next ? 'Conversa arquivada.' : 'Conversa desarquivada.')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : 'Falha ao arquivar.')
+  }
+}
+
+async function onPinConversation(payload: { id: number; next: boolean }) {
+  try {
+    await pinConversation(payload.id, payload.next)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao fixar.')
   }
 }
 
@@ -932,6 +941,7 @@ const groupedMessages = computed<GroupedItem[]>(() => {
         :company-id="companyId"
         :tags-by-lead-id="tagsByLeadId"
         @select="onPickConversation"
+        @pin="onPinConversation"
       />
     </div>
 

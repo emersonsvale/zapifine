@@ -9,6 +9,8 @@ import {
   Check,
   Bot,
   Archive,
+  Pin,
+  PinOff,
   ArrowDownWideNarrow,
   ArrowUpWideNarrow,
 } from 'lucide-vue-next'
@@ -42,6 +44,7 @@ type Conv = {
   funil_nome?: string | null
   coluna_nome?: string | null
   arquivada?: boolean
+  fixada?: boolean
 }
 
 type Setor = { id: string; nome: string; cor: string | null }
@@ -71,7 +74,10 @@ function tagsFor(c: Conv): string[] {
 type FilterMode = 'todas' | 'minhas' | 'sem' | 'setor' | 'arquivadas'
 const filterMode = ref<FilterMode>('todas')
 
-const emit = defineEmits<{ select: [id: number] }>()
+const emit = defineEmits<{
+  select: [id: number]
+  pin: [payload: { id: number; next: boolean }]
+}>()
 
 const search = ref('')
 
@@ -229,6 +235,10 @@ const filtered = computed(() => {
     return hay.includes(q)
   })
   const sorted = list.slice().sort((a, b) => {
+    // Fixadas sempre no topo, independente da direção de ordenação.
+    const pa = a.fixada ? 1 : 0
+    const pb = b.fixada ? 1 : 0
+    if (pa !== pb) return pb - pa
     const ta = new Date(a.last_message_at ?? a.created_at).getTime()
     const tb = new Date(b.last_message_at ?? b.created_at).getTime()
     return sortDir.value === 'desc' ? tb - ta : ta - tb
@@ -651,7 +661,7 @@ function previewText(c: Conv) {
       </p>
 
       <ul v-else>
-        <li v-for="c in filtered" :key="c.id">
+        <li v-for="c in filtered" :key="c.id" class="group relative">
           <button
             type="button"
             class="flex w-full items-start gap-3 border-b border-border/40 px-3 py-3 text-left transition-colors"
@@ -679,6 +689,7 @@ function previewText(c: Conv) {
             <div class="min-w-0 flex-1">
               <div class="flex items-center justify-between gap-2">
                 <p class="flex min-w-0 items-center gap-1.5 truncate text-sm font-medium">
+                  <Pin v-if="c.fixada" class="h-3 w-3 shrink-0 text-emerald-600" />
                   <Users v-if="c.isgrupo" class="h-3.5 w-3.5 shrink-0 text-sky-500" />
                   <span class="truncate">{{ displayName(c) }}</span>
                   <span
@@ -762,6 +773,16 @@ function previewText(c: Conv) {
                 </span>
               </div>
             </div>
+          </button>
+          <button
+            type="button"
+            class="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-background/90 opacity-0 shadow-sm ring-1 ring-border transition hover:bg-accent group-hover:opacity-100"
+            :class="c.fixada ? 'text-emerald-600' : 'text-muted-foreground'"
+            :title="c.fixada ? 'Desafixar' : 'Fixar no topo'"
+            @click.stop="emit('pin', { id: c.id, next: !c.fixada })"
+          >
+            <PinOff v-if="c.fixada" class="h-3.5 w-3.5" />
+            <Pin v-else class="h-3.5 w-3.5" />
           </button>
         </li>
       </ul>
