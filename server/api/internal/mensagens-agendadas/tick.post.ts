@@ -56,7 +56,11 @@ function buildPrefixed(text: string, nome: string | null, cargo: string | null):
   return `*${n} - ${c}*\n\n${text}`
 }
 
-function previewFor(row: AgendadaRow): {
+/**
+ * O que fica gravado na thread. Para texto usa o mesmo conteúdo que foi pro
+ * WhatsApp (já com a assinatura), igual ao envio manual do useChats.
+ */
+function previewFor(row: AgendadaRow, textoEnviado: string): {
   tipo: string
   mensagem: string
   midia_url: string | null
@@ -75,7 +79,7 @@ function previewFor(row: AgendadaRow): {
       midia_url: row.link_url,
     }
   }
-  return { tipo: 'text', mensagem: row.mensagem ?? '', midia_url: null }
+  return { tipo: 'text', mensagem: textoEnviado, midia_url: null }
 }
 
 export default defineEventHandler(async (event) => {
@@ -168,18 +172,19 @@ export default defineEventHandler(async (event) => {
     try {
       const sig = row.created_by ? sigMap.get(row.created_by) : undefined
       let result: { _messageId?: string | null } = {}
+      // Mesma assinatura do envio manual: *Nome - Cargo*\n\ntexto.
+      const textoEnviado = buildPrefixed(
+        (row.mensagem ?? '').trim(),
+        sig?.nome ?? null,
+        sig?.cargo ?? null,
+      )
 
       if (row.tipo === 'text') {
-        const text = buildPrefixed(
-          (row.mensagem ?? '').trim(),
-          sig?.nome ?? null,
-          sig?.cargo ?? null,
-        )
-        if (!text) throw new Error('Mensagem vazia.')
+        if (!textoEnviado) throw new Error('Mensagem vazia.')
         result = await sendViaWhatsApi('/send/text', {
           company_id: row.companies_id,
           number,
-          text,
+          text: textoEnviado,
           conversa_id: row.conversa_id,
           pause_ai: true,
         })
@@ -209,7 +214,7 @@ export default defineEventHandler(async (event) => {
       }
 
       const messageId = result?._messageId ?? null
-      const preview = previewFor(row)
+      const preview = previewFor(row, textoEnviado)
 
       // Registra na thread pra aparecer no chat (e no realtime dos atendentes).
       const msgRow: MensagemInsert = {
