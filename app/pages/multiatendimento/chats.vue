@@ -29,7 +29,10 @@ import {
   PanelRightClose,
   Archive,
   ArchiveRestore,
+  Clock,
+  CalendarClock,
 } from 'lucide-vue-next'
+import type { ScheduledMessage, ScheduledMessageDraft } from '~/composables/useScheduledMessages'
 import type { Database } from '~~/types/database'
 
 type Lead = Database['public']['Tables']['leads']['Row']
@@ -248,7 +251,9 @@ const pollOpen = ref(false)
 const flowTriggerOpen = ref(false)
 const triggeringFlowId = ref<string | null>(null)
 
-function openAttachment(kind: 'media' | 'link' | 'location' | 'contact' | 'poll' | 'flow') {
+function openAttachment(
+  kind: 'media' | 'link' | 'location' | 'contact' | 'poll' | 'flow' | 'schedule',
+) {
   attachMenuOpen.value = false
   if (kind === 'media') mediaOpen.value = true
   else if (kind === 'link') linkOpen.value = true
@@ -256,6 +261,63 @@ function openAttachment(kind: 'media' | 'link' | 'location' | 'contact' | 'poll'
   else if (kind === 'contact') contactOpen.value = true
   else if (kind === 'poll') pollOpen.value = true
   else if (kind === 'flow') flowTriggerOpen.value = true
+  else if (kind === 'schedule') openNewScheduled()
+}
+
+// ---- Mensagens agendadas ----
+const {
+  pendingCount: scheduledPendingCount,
+  create: createScheduled,
+  update: updateScheduled,
+} = useScheduledMessages()
+
+const scheduledDrawerOpen = ref(false)
+const scheduleDialogOpen = ref(false)
+const editingScheduled = ref<ScheduledMessage | null>(null)
+// Dialog dentro do drawer empilharia dois modais; fecha o drawer e reabre depois.
+const reopenDrawerAfterDialog = ref(false)
+
+function openScheduleDialog(item: ScheduledMessage | null) {
+  if (!selectedConversation.value) return
+  editingScheduled.value = item
+  if (scheduledDrawerOpen.value) {
+    reopenDrawerAfterDialog.value = true
+    scheduledDrawerOpen.value = false
+  }
+  scheduleDialogOpen.value = true
+}
+
+function openNewScheduled() {
+  openScheduleDialog(null)
+}
+
+function openEditScheduled(item: ScheduledMessage) {
+  openScheduleDialog(item)
+}
+
+watch(scheduleDialogOpen, (open) => {
+  if (open) return
+  editingScheduled.value = null
+  if (reopenDrawerAfterDialog.value) {
+    reopenDrawerAfterDialog.value = false
+    scheduledDrawerOpen.value = true
+  }
+})
+
+async function onSubmitScheduled(draft: ScheduledMessageDraft) {
+  const editing = editingScheduled.value
+  try {
+    if (editing) {
+      await updateScheduled(editing.id, draft)
+      toast.success('Agendamento atualizado.')
+    } else {
+      await createScheduled(draft)
+      toast.success('Mensagem agendada.')
+    }
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : 'Falha ao agendar.')
+    throw err
+  }
 }
 
 async function onSendRich(
@@ -1072,6 +1134,22 @@ const groupedMessages = computed<GroupedItem[]>(() => {
           <Button
             variant="outline"
             size="sm"
+            class="relative gap-1"
+            title="Mensagens agendadas"
+            @click="scheduledDrawerOpen = true"
+          >
+            <Clock class="h-4 w-4" />
+            <span class="hidden text-xs sm:inline">Agendadas</span>
+            <span
+              v-if="scheduledPendingCount > 0"
+              class="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-sky-500 px-1 text-[10px] font-semibold tabular-nums text-white"
+            >
+              {{ scheduledPendingCount > 9 ? '9+' : scheduledPendingCount }}
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             class="gap-1"
             :disabled="!hasLead"
             :title="!hasLead ? 'Vincule um lead para agendar' : 'Novo agendamento'"
@@ -1330,6 +1408,23 @@ const groupedMessages = computed<GroupedItem[]>(() => {
                 </button>
                 <div class="my-1 border-t" />
                 <div class="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
+                  Agendamento
+                </div>
+                <button
+                  type="button"
+                  class="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors hover:bg-accent"
+                  @click="openAttachment('schedule')"
+                >
+                  <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10">
+                    <CalendarClock class="h-4 w-4 text-cyan-500" />
+                  </div>
+                  <div class="text-left">
+                    <p class="text-sm font-medium">Mensagem agendada</p>
+                    <p class="text-[11px] text-muted-foreground">Enviar em data e hora futura</p>
+                  </div>
+                </button>
+                <div class="my-1 border-t" />
+                <div class="mb-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
                   Automação
                 </div>
                 <button
@@ -1495,6 +1590,19 @@ const groupedMessages = computed<GroupedItem[]>(() => {
     <ChatsFlowTriggerDialog
       v-model:open="flowTriggerOpen"
       @trigger="onTriggerFlow"
+    />
+
+    <ChatsScheduledMessagesDrawer
+      v-model:open="scheduledDrawerOpen"
+      @new="openNewScheduled"
+      @edit="openEditScheduled"
+    />
+
+    <ChatsScheduleMessageDialog
+      v-model:open="scheduleDialogOpen"
+      :editing="editingScheduled"
+      :contact-name="headerName"
+      @submit="onSubmitScheduled"
     />
   </div>
 </template>

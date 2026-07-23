@@ -956,6 +956,103 @@ export type Database = {
           },
         ]
       }
+      chat_mensagens_agendadas: {
+        Row: {
+          attempts: number
+          companies_id: string
+          conversa_id: number
+          created_at: string
+          created_by: string | null
+          id: string
+          id_mensagem: string | null
+          last_error: string | null
+          lead_id: number | null
+          link_descricao: string | null
+          link_titulo: string | null
+          link_url: string | null
+          mensagem: string | null
+          midia_mime: string | null
+          midia_nome: string | null
+          midia_tipo: string | null
+          midia_url: string | null
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          companies_id: string
+          conversa_id: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          id_mensagem?: string | null
+          last_error?: string | null
+          lead_id?: number | null
+          link_descricao?: string | null
+          link_titulo?: string | null
+          link_url?: string | null
+          mensagem?: string | null
+          midia_mime?: string | null
+          midia_nome?: string | null
+          midia_tipo?: string | null
+          midia_url?: string | null
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          companies_id?: string
+          conversa_id?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          id_mensagem?: string | null
+          last_error?: string | null
+          lead_id?: number | null
+          link_descricao?: string | null
+          link_titulo?: string | null
+          link_url?: string | null
+          mensagem?: string | null
+          midia_mime?: string | null
+          midia_nome?: string | null
+          midia_tipo?: string | null
+          midia_url?: string | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_mensagens_agendadas_companies_id_fkey"
+            columns: ["companies_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_mensagens_agendadas_conversa_id_fkey"
+            columns: ["conversa_id"]
+            isOneToOne: false
+            referencedRelation: "whats_conversa"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_mensagens_agendadas_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cobrancas: {
         Row: {
           checkout_session_id: string | null
