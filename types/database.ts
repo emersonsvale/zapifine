@@ -2855,6 +2855,10 @@ export type Database = {
           interna: boolean | null
           lead_id: number | null
           mensagem: string | null
+          midia_expirada: boolean | null
+          midia_mime: string | null
+          midia_nome: string | null
+          midia_pendente: boolean | null
           midia_url: string | null
           quemmandou: string | null
           quoted_message_id: string | null
@@ -2875,6 +2879,10 @@ export type Database = {
           interna?: boolean | null
           lead_id?: number | null
           mensagem?: string | null
+          midia_expirada?: boolean | null
+          midia_mime?: string | null
+          midia_nome?: string | null
+          midia_pendente?: boolean | null
           midia_url?: string | null
           quemmandou?: string | null
           quoted_message_id?: string | null
@@ -2895,6 +2903,10 @@ export type Database = {
           interna?: boolean | null
           lead_id?: number | null
           mensagem?: string | null
+          midia_expirada?: boolean | null
+          midia_mime?: string | null
+          midia_nome?: string | null
+          midia_pendente?: boolean | null
           midia_url?: string | null
           quemmandou?: string | null
           quoted_message_id?: string | null

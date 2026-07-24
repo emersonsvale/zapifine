@@ -13,6 +13,8 @@ import {
   StickyNote,
   ArrowRightLeft,
   ZoomIn,
+  Download,
+  FileClock,
 } from 'lucide-vue-next'
 import type { Database } from '~~/types/database'
 
@@ -295,6 +297,46 @@ function openLightbox() {
   if (!props.message.midia_url) return
   lightboxOpen.value = true
 }
+
+// ---- Mídia sob demanda (opt-in) + expiração ----
+type MediaMeta = {
+  midia_pendente?: boolean | null
+  midia_expirada?: boolean | null
+  midia_nome?: string | null
+}
+const mediaMeta = computed(() => props.message as unknown as MediaMeta)
+const isMediaExpired = computed(() => !!mediaMeta.value.midia_expirada && !props.message.midia_url)
+const isMediaPending = computed(
+  () => !!mediaMeta.value.midia_pendente && !props.message.midia_url && !isMediaExpired.value,
+)
+const pendingLabel = computed(() => {
+  if (isVideo.value) return '🎬 Vídeo'
+  if (isDocument.value) return `📎 ${mediaMeta.value.midia_nome?.trim() || 'Documento'}`
+  return '📎 Arquivo'
+})
+
+const downloading = ref(false)
+async function downloadMedia() {
+  if (downloading.value || !props.message.id_mensagem) {
+    if (!props.message.id_mensagem) toast.error('Mensagem sem ID — download indisponível.')
+    return
+  }
+  downloading.value = true
+  try {
+    // O realtime UPDATE troca o card pela mídia assim que a whats-api gravar a URL.
+    await $fetch('/api/chats/media/fetch', {
+      method: 'POST',
+      body: { message_wa_id: props.message.id_mensagem },
+    })
+  } catch (err) {
+    const msg =
+      (err as { data?: { statusMessage?: string } })?.data?.statusMessage ??
+      (err instanceof Error ? err.message : 'Falha ao baixar a mídia.')
+    toast.error(msg)
+  } finally {
+    downloading.value = false
+  }
+}
 </script>
 
 <template>
@@ -427,6 +469,49 @@ function openLightbox() {
           Mensagem apagada
         </p>
       </template>
+
+      <template v-else-if="isMediaExpired">
+        <p
+          class="flex items-center gap-1.5 text-xs italic"
+          :class="isSent ? 'opacity-80' : 'opacity-70'"
+        >
+          <FileClock class="h-3.5 w-3.5 shrink-0" />
+          Arquivo expirado (mais de 3 meses)
+        </p>
+        <p
+          v-if="message.mensagem"
+          class="mt-1 whitespace-pre-wrap break-words"
+          v-html="formattedMessage"
+          @click="onMessageClick"
+        />
+      </template>
+
+      <template v-else-if="isMediaPending">
+        <button
+          type="button"
+          class="flex w-full items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm transition disabled:opacity-60"
+          :class="
+            isSent
+              ? 'border-white/50 hover:bg-white/10'
+              : 'border-border hover:bg-accent'
+          "
+          :disabled="downloading"
+          :title="'Baixar arquivo'"
+          @click="downloadMedia"
+        >
+          <Loader2 v-if="downloading" class="h-4 w-4 shrink-0 animate-spin" />
+          <Download v-else class="h-4 w-4 shrink-0" />
+          <span class="min-w-0 flex-1 truncate text-left">{{ pendingLabel }}</span>
+          <span class="shrink-0 text-xs opacity-70">{{ downloading ? 'Baixando…' : 'Baixar' }}</span>
+        </button>
+        <p
+          v-if="message.mensagem"
+          class="mt-1 whitespace-pre-wrap break-words"
+          v-html="formattedMessage"
+          @click="onMessageClick"
+        />
+      </template>
+
       <template v-else-if="isImage && message.midia_url">
         <img
           :src="message.midia_url"
